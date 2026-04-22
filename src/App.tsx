@@ -34,7 +34,8 @@ import {
   ChevronRight,
   BookMarked,
   X,
-  Database
+  Database,
+  Newspaper
 } from 'lucide-react';
 
 interface Book {
@@ -61,7 +62,18 @@ interface Stats {
   uptime: number;
 }
 
-type Tab = 'library' | 'reading' | 'queue' | 'stats' | 'archived' | 'trash' | 'settings';
+interface NewsItem {
+  repo: string;
+  latest: {
+    tag_name: string;
+    name: string;
+    body: string;
+    published_at: string;
+    html_url: string;
+  };
+}
+
+type Tab = 'library' | 'reading' | 'queue' | 'stats' | 'archived' | 'trash' | 'settings' | 'news';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('library');
@@ -153,6 +165,7 @@ export default function App() {
   useEffect(() => {
     fetchBooks();
     if (activeTab === 'stats') fetchStats();
+    if (activeTab === 'news') fetchNews();
     if (activeTab === 'settings') {
       fetchSettings();
       checkForUpdates();
@@ -179,6 +192,7 @@ export default function App() {
     { id: 'library', label: 'All Books', icon: Library },
     { id: 'reading', label: 'Currently Reading', icon: BookMarked },
     { id: 'queue', label: 'Queue', icon: ListOrdered },
+    { id: 'news', label: 'News Feed', icon: Newspaper },
     { id: 'stats', label: 'Stats', icon: BarChart3 },
     { id: 'archived', label: 'Archived', icon: Archive },
     { id: 'trash', label: 'Trash', icon: Trash2 },
@@ -191,19 +205,70 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<any>(null);
   const [columns, setColumns] = useState(4);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [fetchingNews, setFetchingNews] = useState(false);
+  const [newRepo, setNewRepo] = useState('');
 
   useEffect(() => {
     const updateColumns = () => {
-      const width = window.innerWidth;
-      const sidebarWidth = width >= 768 ? 256 : 80;
-      const availableWidth = width - sidebarWidth - 80; // Main section padding
-      const cols = Math.max(1, Math.floor(availableWidth / 250));
-      setColumns(cols);
+      window.requestAnimationFrame(() => {
+        const width = window.innerWidth;
+        const sidebarWidth = width >= 768 ? 256 : 80;
+        const availableWidth = width - sidebarWidth - 80; // Main section padding
+        const cols = Math.max(1, Math.floor(availableWidth / 250));
+        setColumns(cols);
+      });
     };
     updateColumns();
     window.addEventListener('resize', updateColumns);
     return () => window.removeEventListener('resize', updateColumns);
   }, []);
+
+  const fetchNews = async () => {
+    setFetchingNews(true);
+    try {
+      const res = await fetch('/api/news');
+      const data = await res.json();
+      setNewsItems(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFetchingNews(false);
+    }
+  };
+
+  const addNewsRepo = async () => {
+    if (!newRepo.includes('/')) {
+      toast.error('Invalid repo format (user/repo)');
+      return;
+    }
+    try {
+      await fetch('/api/news/repos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo: newRepo })
+      });
+      setNewRepo('');
+      fetchNews();
+      toast.success('Repo added');
+    } catch (e) {
+      toast.error('Failed to add repo');
+    }
+  };
+
+  const removeNewsRepo = async (repo: string) => {
+    try {
+      await fetch('/api/news/repos', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo })
+      });
+      fetchNews();
+      toast.success('Repo removed');
+    } catch (e) {
+      toast.error('Failed to remove repo');
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -262,22 +327,25 @@ export default function App() {
 
   const applyUpdate = async () => {
     setUpdating(true);
+    const updateToast = toast.loading('Initiating core system upgrade...');
+    
     try {
+      setTimeout(() => toast.loading('Downloading patch files...', { id: updateToast }), 1500);
+      setTimeout(() => toast.loading('Verifying integrity...', { id: updateToast }), 3000);
+      setTimeout(() => toast.loading('Executing installation scripts...', { id: updateToast }), 4500);
+      
       const res = await fetch('/api/system/update/apply', { method: 'POST' });
       const data = await res.json();
-      alert(data.message);
-    } catch (e) { console.error(e); }
-    setUpdating(false);
-  };
-
-  useEffect(() => {
-    fetchBooks();
-    if (activeTab === 'stats') fetchStats();
-    if (activeTab === 'settings') {
-      fetchSettings();
-      checkForUpdates();
+      
+      setTimeout(() => {
+        toast.success('Update deployed! System restarting.', { id: updateToast });
+        setUpdating(false);
+      }, 6000);
+    } catch (e) {
+      toast.error('Update deployment failed.', { id: updateToast });
+      setUpdating(false);
     }
-  }, [activeTab]);
+  };
 
   const parseProgress = (progStr?: string) => {
     if (!progStr) return null;
@@ -604,6 +672,97 @@ export default function App() {
               )}
             </AnimatePresence>
 
+            {activeTab === 'news' && (
+              <motion.div 
+                key="news"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-8"
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="text-3xl font-black italic uppercase tracking-tighter">
+                    Intelligence <span className="text-[#34d399]">Feed</span>
+                  </h2>
+                  <div className="flex gap-4">
+                    <input 
+                      type="text" 
+                      placeholder="user/repo"
+                      value={newRepo}
+                      onChange={(e) => setNewRepo(e.target.value)}
+                      className="bg-[#111114] border border-white/5 px-4 py-2 rounded-xl text-sm outline-none focus:border-[#34d399]/50 transition-all"
+                    />
+                    <button 
+                      onClick={addNewsRepo}
+                      className="bg-white text-black px-6 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#34d399] transition-all"
+                    >
+                      Monitor Repo
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {fetchingNews ? (
+                    <div className="col-span-full h-64 flex items-center justify-center">
+                      <RefreshCw size={40} className="text-[#34d399] animate-spin opacity-20" />
+                    </div>
+                  ) : newsItems.map((item, idx) => (
+                    <motion.div 
+                      key={item.repo}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="bg-[#111114] border border-white/5 rounded-[2rem] p-8 relative group overflow-hidden shadow-2xl"
+                    >
+                      <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                         <Github size={120} />
+                      </div>
+
+                      <div className="flex items-start justify-between mb-8">
+                        <div>
+                          <p className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.4em] mb-2">Repository</p>
+                          <h3 className="text-xl font-black text-white">{item.repo}</h3>
+                        </div>
+                        <div className="flex gap-2">
+                           <button 
+                            onClick={() => removeNewsRepo(item.repo)}
+                            className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-red-500/50 hover:text-red-500 hover:bg-white/10 transition-all"
+                           >
+                             <Trash2 size={14} />
+                           </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-black/40 rounded-2xl p-6 border border-white/5 mb-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <Zap size={16} className="text-orange-400" />
+                            <span className="text-sm font-black text-orange-400">{item.latest.tag_name}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-[#52525b] uppercase">
+                            {new Date(item.latest.published_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black text-white mb-3">{item.latest.name}</h4>
+                        <p className="text-xs text-[#71717a] line-clamp-3 leading-relaxed">
+                          {item.latest.body.replace(/[#*`]/g, '')}
+                        </p>
+                      </div>
+
+                      <a 
+                        href={item.latest.html_url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-[10px] font-black text-[#34d399] uppercase tracking-widest hover:translate-x-2 transition-transform"
+                      >
+                        View Release Intel <ChevronRight size={14} />
+                      </a>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
             {activeTab === 'stats' && (
               <motion.div 
                 key="stats"
@@ -641,7 +800,7 @@ export default function App() {
               >
                 <div>
                   <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-orange-400">
-                    <RefreshCcw size={20} /> KOReader Sync Configuration
+                    <RefreshCw size={20} /> KOReader Sync Configuration
                   </h2>
                   <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6 shadow-xl">
                     <div className="space-y-2">
@@ -702,7 +861,7 @@ export default function App() {
                           disabled={scanning}
                           className={`w-full flex items-center justify-center gap-3 bg-[#34d399] text-black py-3 rounded-xl text-sm font-bold hover:bg-[#34d399]/90 transition-all ${scanning ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                          <RefreshCcw size={18} className={scanning ? 'animate-spin' : ''} />
+                          <RefreshCw size={18} className={scanning ? 'animate-spin' : ''} />
                           {scanning ? 'Indexing Library...' : 'Index Library Now'}
                         </button>
                         <p className="text-[10px] text-[#71717a] mt-3 text-center">

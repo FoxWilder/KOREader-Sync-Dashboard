@@ -246,9 +246,11 @@ async function startServer() {
   // System Update
   app.get('/api/system/update/check', async (req, res) => {
     try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+      const currentVersion = pkg.version;
       const githubRes = await fetch('https://api.github.com/repos/FoxWilder/KOReader-Sync-Dashboard/releases/latest');
       const latest = await githubRes.json() as any;
-      const currentVersion = '1.1.0'; // Hardcoded for now, should match package.json
+      
       res.json({
         latestVersion: latest.tag_name,
         currentVersion,
@@ -263,8 +265,6 @@ async function startServer() {
     logToFile('service_log.txt', 'WEB-UPDATE: Initiating fully automated update via install.ps1');
     
     // Launch a detached process to handle the update
-    // This starts a NEW powershell process that will download and run the installer
-    // The installer will then identify and kill THIS process to overwrite files.
     const installerCommand = `iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1 | iex`;
     const spawnCommand = `Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command \`"${installerCommand}\`"" -WindowStyle Normal`;
     
@@ -278,6 +278,67 @@ async function startServer() {
       logToFile('service_log.txt', `Update launch failed: ${e}`);
       res.status(500).json({ error: 'Update failed to launch' });
     }
+  });
+
+  // News Feed
+  app.get('/api/news', async (req, res) => {
+    try {
+      const customReposRaw = db.prepare('SELECT value FROM settings WHERE key = ?').get('news_repos') as any;
+      const customRepos = customReposRaw ? JSON.parse(customReposRaw.value) : [];
+      
+      const defaultRepos = [
+        'koreader/koreader',
+        'franssjz/cpr-vcodex'
+      ];
+      
+      const allRepos = Array.from(new Set([...defaultRepos, ...customRepos]));
+      const newsFeed = [];
+
+      for (const repo of allRepos) {
+        try {
+          const githubRes = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+            headers: { 'User-Agent': 'WilderSync' }
+          });
+          const releases = await githubRes.json() as any[];
+          if (Array.isArray(releases) && releases.length > 0) {
+            newsFeed.push({
+              repo,
+              latest: releases[0]
+            });
+          }
+        } catch (e) {
+          console.error(`Failed to fetch releases for ${repo}:`, e);
+        }
+      }
+      
+      res.json(newsFeed);
+    } catch (e) {
+      res.status(500).json({ error: 'news-fetch-failed' });
+    }
+  });
+
+  app.post('/api/news/repos', (req, res) => {
+    const { repo } = req.body;
+    if (!repo) return res.status(400).json({ error: 'repo-required' });
+    
+    const currentRaw = db.prepare('SELECT value FROM settings WHERE key = ?').get('news_repos') as any;
+    let repos = currentRaw ? JSON.parse(currentRaw.value) : [];
+    if (!repos.includes(repo)) {
+      repos.push(repo);
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run('news_repos', JSON.stringify(repos));
+    }
+    res.json({ success: true, repos });
+  });
+
+  app.delete('/api/news/repos', (req, res) => {
+    const { repo } = req.body;
+    const currentRaw = db.prepare('SELECT value FROM settings WHERE key = ?').get('news_repos') as any;
+    if (currentRaw) {
+      let repos = JSON.parse(currentRaw.value);
+      repos = repos.filter((r: string) => r !== repo);
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run('news_repos', JSON.stringify(repos));
+    }
+    res.json({ success: true });
   });
 
   // Shortened Sync Route for KOReader
