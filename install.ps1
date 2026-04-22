@@ -34,10 +34,10 @@ if ($Uninstall) {
     if ($confirm) {
         Write-Log "Uninstalling..." "Yellow"
         # Stop any running processes
-        Get-Process | Where-Object { $_.CommandLine -like "*server.ts*" -or $_.CommandLine -like "*node*" } | Stop-Process -ErrorAction SilentlyContinue 
+        Get-Process | Where-Object { $_.Name -like "*node*" -or $_.CommandLine -like "*server.ts*" } | Stop-Process -ErrorAction SilentlyContinue 
         
         Write-Log "Removing files..."
-        $filesToRemove = "dist", "node_modules", "wilder.db", "sake.db", ".env", "package.json", "package-lock.json", "setup.ps1", "migrate.py", "server.ts", "service_log.txt", "sync_log.txt", "install_log.txt", "drizzle.config.ts"
+        $filesToRemove = "dist", "node_modules", "wilder.db", "sake.db", ".env", "package.json", "package-lock.json", "setup.ps1", "migrate.py", "server.ts", "service_log.txt", "sync_log.txt", "install_log.txt", "drizzle.config.ts", "tsconfig.json", "vite.config.ts", "index.html", "src", "drizzle"
         foreach ($f in $filesToRemove) {
             if (Test-Path "$installDir\$f") { Remove-Item -Recurse -Force "$installDir\$f" }
         }
@@ -79,7 +79,7 @@ try {
         $releaseInfo = Invoke-RestMethod -Uri $releaseUrl
     }
     
-    $asset = $releaseInfo.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+    $asset = $releaseInfo.assets | Where-Object { $_.name -like "wilder-sync-*.zip" -or $_.name -like "koreader-sync-dashboard-*.zip" } | Select-Object -First 1
     if (-not $asset) {
         Write-Error "No ZIP asset found in release $($releaseInfo.tag_name)"
         exit 1
@@ -141,10 +141,15 @@ if ($process) {
     }
     
     if (Test-Path "service_log.txt") {
+        Write-Log "Service is now live. Tailing logs..." "Magenta"
         Get-Content -Path "service_log.txt" -Wait -Tail 20
     } else {
-        Write-Log "CRITICAL: Service failed to initialize log files. The process may have crashed." "Red"
-        Write-Log "Check the terminal for immediate errors."
+        Write-Log "CRITICAL: Service failed to initialize log files within 15s." "Red"
+        Write-Log "Possible causes:"
+        Write-Log "1. Node.js/tsx is not in your PATH."
+        Write-Log "2. 'better-sqlite3' failed to load its native binary."
+        Write-Log "3. server.ts has a syntax error."
+        Write-Log "Check 'install_log.txt' for details."
     }
 } else {
     Write-Log "ERROR: Failed to start the dashboard process." "Red"

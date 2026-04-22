@@ -48,18 +48,20 @@ jobs:
       - name: Prepare Release ZIP
         run: |
           mkdir -p release
-          cp -r package.json package-lock.json setup.ps1 migrate.py check_environment.py server.ts release/
-          [ -d build ] && cp -r build release/ || true
+          # Core files
+          cp -r package.json package-lock.json setup.ps1 migrate.py check_environment.py server.ts drizzle.config.ts tsconfig.json vite.config.ts index.html release/
+          # Source and styling
+          cp -r src release/
+          # Build artifacts
           [ -d dist ] && cp -r dist release/ || true
-          [ -d .svelte-kit ] && cp -r .svelte-kit release/ || true
-          cd release && zip -r ../koreader-sync-dashboard-${{ steps.vars.outputs.tag }}.zip .
+          cd release && zip -r ../wilder-sync-${{ steps.vars.outputs.tag }}.zip .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
-          name: Release ${{ steps.vars.outputs.tag }}
-          files: koreader-sync-dashboard-${{ steps.vars.outputs.tag }}.zip
+          name: Wilder Sync v1.1.0-Release (${{ steps.vars.outputs.tag }})
+          files: wilder-sync-${{ steps.vars.outputs.tag }}.zip
           draft: false
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           generate_release_notes: true
