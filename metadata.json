@@ -1,0 +1,6 @@
+{
+  "name": "Sake Non-Docker Setup",
+  "description": "Migration and setup tools for running Sudashiii/Sake without Docker using PowerShell and Node.js/Python.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
