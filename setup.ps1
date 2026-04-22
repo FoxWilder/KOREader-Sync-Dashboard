@@ -44,7 +44,12 @@ Write-Host "Installing Node.js dependencies..."
 npm install
 if ($LASTEXITCODE -ne 0) { Write-Error "NPM install failed."; exit 1 }
 
-# 4. Database Setup (Drizzle)
+# 4. Build Application
+Write-Host "Building application for production..."
+npm run build
+if ($LASTEXITCODE -ne 0) { Write-Error "Build failed."; exit 1 }
+
+# 5. Database Setup (Drizzle)
 Write-Host "Initializing database..."
 # Corrected: Do not pass -ErrorAction SilentlyContinue to npm, as it is an external command
 npm run db:push

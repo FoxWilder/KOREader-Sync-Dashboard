@@ -124,38 +124,57 @@ if (Test-Path $setupScript) {
 Write-Log "--- Operation Successful ---" "Green"
 if ($isUpdate) { Write-Log "Note: Previous database backup saved in $backupDir" "Gray" }
 
-Write-Log "Starting Wilder Dashboard service..." "Cyan"
-# Start the server using npm.cmd for Windows compatibility
+Write-Log "Starting Wilder Dashboard service (Production Mode)..." "Cyan"
 $npmCmd = "npm"
 if ($IsWindows) { $npmCmd = "npm.cmd" }
 
-$process = Start-Process -FilePath $npmCmd -ArgumentList "run dev" -WindowStyle Hidden -PassThru -WorkingDirectory $installDir
+# Use 'npm start' which forces production mode
+$process = Start-Process -FilePath $npmCmd -ArgumentList "start" -WindowStyle Hidden -PassThru -WorkingDirectory $installDir
 
 if ($process) {
-    Write-Log "Dashboard is starting in the background (PID: $($process.Id))." "Green"
-    Write-Log "Service logs will appear below. Press Ctrl+C to close this manager window." "Yellow"
-    Write-Log "(The service will continue running even if you close this window)" "Gray"
+    Write-Log "Dashboard is starting (PID: $($process.Id))." "Green"
+    Write-Log "Waiting for listening state (max 60s)..." "Yellow"
     
-    # Wait for logs to be initialized by the server (max 20s)
     $retry = 0
-    while (-not (Test-Path "service_log.txt") -and $retry -lt 20) {
+    $found = $false
+    while ($retry -lt 60 -and -not $found) {
+        if (Test-Path "service_log.txt") {
+            $content = Get-Content -Path "service_log.txt" -Raw
+            if ($content -like "*Server successfully listening*") {
+                $found = $true
+            }
+        }
         Start-Sleep -Seconds 1
         $retry++
     }
     
-    if (Test-Path "service_log.txt") {
-        Write-Log "Service is now live. Tailing logs..." "Magenta"
-        # Watch for the "listening" message
-        $isListening = $false
-        Get-Content -Path "service_log.txt" -Wait -Tail 20 | ForEach-Object {
-            $_ # Output the log line
-            if ($_ -like "*Server successfully listening*") {
-                Write-Log "--- SUCCESS: Wilder is online at http://localhost:3000 ---" "Green"
+    if ($found) {
+        Write-Log "Server is listening. Performing health check..." "Yellow"
+        $healthOk = $false
+        $hRetry = 0
+        while ($hRetry -lt 10 -and -not $healthOk) {
+            try {
+                $response = Invoke-RestMethod -Uri "http://localhost:3000/api/health" -TimeoutSec 2
+                if ($response.status -eq "ok") { $healthOk = $true }
+            } catch {
+                Start-Sleep -Seconds 2
             }
+            $hRetry++
+        }
+
+        if ($healthOk) {
+            Write-Log "--- SUCCESS: Wilder is online at http://localhost:3000 ---" "Green"
+            Write-Log "Logs (Press Ctrl+C to exit manager):" "Gray"
+            Get-Content -Path "service_log.txt" -Wait -Tail 20
+        } else {
+            Write-Log "WARNING: Server is listening but health check failed." "Yellow"
+            Write-Log "Check service_log.txt for potential routing or database issues."
+            Get-Content -Path "service_log.txt" -Wait -Tail 20
         }
     } else {
-        Write-Log "CRITICAL: Service failed to initialize log files within 20s." "Red"
-        Write-Log "Check if another service is already using port 3000." "Yellow"
-        Write-Log "You can try running 'npm run dev' manually to see immediate errors."
+        Write-Log "CRITICAL: Service failed to respond within 60s." "Red"
+        if (Test-Path "service_log.txt") {
+            Get-Content -Path "service_log.txt" -Tail 10
+        }
     }
 }

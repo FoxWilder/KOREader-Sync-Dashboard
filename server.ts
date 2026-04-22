@@ -22,13 +22,20 @@ async function startServer() {
     if (!fs.existsSync(p)) fs.writeFileSync(p, '');
   });
 
-  logToFile('service_log.txt', '--- Wilder Server Starting ---');
-  
   const app = express();
   const PORT = 3000;
-  
-  logToFile('service_log.txt', `Attempting to initialize database at ${path.join(process.cwd(), 'wilder.db')}...`);
+  const isProd = process.env.NODE_ENV === 'production';
+
+  logToFile('service_log.txt', `--- Wilder Server Starting (Mode: ${isProd ? 'PRODUCTION' : 'DEVELOPMENT'}) ---`);
+
+  // Start listening IMMEDIATELY to prevent parent process hangs and confirm port ownership
+  app.listen(PORT, '0.0.0.0', () => {
+    logToFile('service_log.txt', `Server successfully listening on http://0.0.0.0:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+
   try {
+    logToFile('service_log.txt', `Initializing database at ${path.join(process.cwd(), 'wilder.db')}...`);
     const db = new Database('wilder.db', { verbose: (msg) => logToFile('service_log.txt', `DB: ${msg}`) });
     logToFile('service_log.txt', 'Database connection established.');
 
@@ -200,10 +207,6 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    logToFile('service_log.txt', `Server successfully listening on http://0.0.0.0:${PORT}`);
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
   } catch (err) {
     logToFile('service_log.txt', `CRITICAL ERROR during startup: ${err}`);
     console.error('Critical boot error:', err);
