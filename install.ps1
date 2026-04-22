@@ -110,22 +110,8 @@ $tempFile = "$env:TEMP\wilder-$($releaseInfo.tag_name).zip"
 Write-Log "Downloading from $assetUrl..."
 Invoke-WebRequest -Uri $assetUrl -OutFile $tempFile
 
-# 5. Extract & Deploy
-Write-Log "Deploying files to $installDir..."
-Expand-Archive -Path $tempFile -DestinationPath $installDir -Force
-Remove-Item $tempFile
-
-# 6. Post-Install Setup
-if (Test-Path $setupScript) {
-    Write-Log "Running lifecycle scripts..."
-    powershell -ExecutionPolicy Bypass -File $setupScript
-}
-
-Write-Log "--- Operation Successful ---" "Green"
-if ($isUpdate) { Write-Log "Note: Previous database backup saved in $backupDir" "Gray" }
-
+# 5. Stop running processes before deployment to prevent locks
 Write-Log "Stopping any existing Wilder processes..." "Yellow"
-# Kill processes using port 3000
 try {
     $portProcess = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
     if ($portProcess) {
@@ -138,8 +124,21 @@ try {
     }
 } catch {}
 
-# General cleanup of node processes started by us
 Get-Process | Where-Object { $_.Name -like "*node*" -and ($_.CommandLine -like "*server.ts*" -or $_.Path -like "*$installDir*") } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+# 6. Extract & Deploy
+Write-Log "Deploying files to $installDir..."
+Expand-Archive -Path $tempFile -DestinationPath $installDir -Force
+Remove-Item $tempFile
+
+# 7. Post-Install Setup
+if (Test-Path $setupScript) {
+    Write-Log "Running lifecycle scripts..."
+    powershell -ExecutionPolicy Bypass -File $setupScript
+}
+
+Write-Log "--- Operation Successful ---" "Green"
+if ($isUpdate) { Write-Log "Note: Previous database backup saved in $backupDir" "Gray" }
 
 Write-Log "Starting Wilder Dashboard service (Bundled Node Mode)..." "Cyan"
 $nodeExe = (Get-Command node).Source

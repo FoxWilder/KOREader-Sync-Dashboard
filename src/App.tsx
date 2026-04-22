@@ -649,9 +649,6 @@ export default function App() {
                     <History size={20} /> System Maintenance
                   </h2>
                   <div className="flex gap-4">
-                    <button className="flex-grow flex items-center justify-center gap-3 bg-[#18181b] border border-[#27272a] py-4 rounded-xl text-sm font-bold hover:border-white/20 transition-all">
-                       <RefreshCcw size={18} /> Forced Handshake
-                    </button>
                     <button className="flex-grow flex items-center justify-center gap-3 bg-red-500/10 border border-red-500/50 py-4 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/20 transition-all">
                        <Trash2 size={18} /> Clear Database
                     </button>

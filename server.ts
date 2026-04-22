@@ -144,8 +144,9 @@ async function startServer() {
           const md5 = createHash('md5').update(fullPath).digest('hex');
           const coverTxtPath = path.join(coversDir, `${md5}.txt`);
           
+          const fallbackId = path.basename(file, path.extname(file));
           let coverPath = '';
-          let ebookTitle = id;
+          let ebookTitle = fallbackId;
           let ebookAuthor = 'Unknown';
           let ebookDesc = '';
           let ebookPub = '';
@@ -258,16 +259,25 @@ async function startServer() {
     }
   });
 
-  app.post('/api/system/update/apply', async (req, res) => {
-    logToFile('service_log.txt', 'Update requested via UI. Triggering install.ps1...');
-    // We can't easily self-update on Windows while running.
-    // We suggest the user to use the PowerShell command or we trigger a one-shot task.
-    // For this implementation, we will log a special message that the manager (if we had one) could pick up,
-    // or we just tell the user to run the one-liner in the log.
-    res.json({ 
-      success: true, 
-      message: 'Update command issued. Please run the PowerShell one-liner to complete the upgrade.' 
-    });
+  app.post('/api/system/update/apply', (req, res) => {
+    logToFile('service_log.txt', 'WEB-UPDATE: Initiating fully automated update via install.ps1');
+    
+    // Launch a detached process to handle the update
+    // This starts a NEW powershell process that will download and run the installer
+    // The installer will then identify and kill THIS process to overwrite files.
+    const installerCommand = `iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1 | iex`;
+    const spawnCommand = `Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command \`"${installerCommand}\`"" -WindowStyle Normal`;
+    
+    try {
+      require('child_process').exec(`powershell -Command "${spawnCommand}"`);
+      res.json({ 
+        success: true, 
+        message: 'Update initiated. A new PowerShell window has been launched on the server to perform the update. This dashboard will go offline momentarily.' 
+      });
+    } catch (e) {
+      logToFile('service_log.txt', `Update launch failed: ${e}`);
+      res.status(500).json({ error: 'Update failed to launch' });
+    }
   });
 
   // Shortened Sync Route for KOReader
