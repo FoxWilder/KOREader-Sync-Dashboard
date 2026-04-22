@@ -1,5 +1,5 @@
 {
-  "name": "@foxwilder/koreader-sync-dashboard",
+  "name": "@foxwilder/wilder-koreader-sync",
   "private": false,
   "version": "1.0.0",
   "type": "module",
@@ -14,7 +14,7 @@
     "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "db:push": "npx drizzle-kit push",
+    "db:push": "drizzle-kit push",
     "start": "node dist/server.js",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"

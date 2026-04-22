@@ -14,7 +14,7 @@ function logToFile(filename: string, message: string) {
 async function startServer() {
   const app = express();
   const PORT = 3000;
-  const db = new Database('sake.db');
+  const db = new Database('wilder.db');
 
   // service_log.txt for general web requests
   app.use((req, res, next) => {
@@ -43,6 +43,9 @@ async function startServer() {
       author TEXT,
       filePath TEXT,
       coverPath TEXT,
+      status TEXT DEFAULT 'queue', -- queue, reading, archived, trash
+      progress TEXT,
+      isReading INTEGER DEFAULT 0,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS sync_data (
@@ -70,8 +73,52 @@ async function startServer() {
 
   // Library
   app.get('/api/books', (req, res) => {
-    const books = db.prepare('SELECT * FROM books ORDER BY createdAt DESC').all();
+    const { status } = req.query;
+    let query = 'SELECT * FROM books';
+    const params: any[] = [];
+    
+    if (status) {
+      query += ' WHERE status = ?';
+      params.push(status);
+    } else {
+      query += " WHERE status NOT IN ('archived', 'trash')";
+    }
+    
+    query += ' ORDER BY createdAt DESC';
+    const books = db.prepare(query).all(...params);
     res.json(books);
+  });
+
+  app.patch('/api/books/:id', (req, res) => {
+    const { id } = req.params;
+    const { status, isReading, progress } = req.body;
+    
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (status !== undefined) { updates.push('status = ?'); params.push(status); }
+    if (isReading !== undefined) { updates.push('isReading = ?'); params.push(isReading ? 1 : 0); }
+    if (progress !== undefined) { updates.push('progress = ?'); params.push(progress); }
+    
+    if (updates.length === 0) return res.status(400).json({ error: 'no updates' });
+    
+    params.push(id);
+    db.prepare(`UPDATE books SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    res.json({ success: true });
+  });
+
+  // Stats
+  app.get('/api/stats', (req, res) => {
+    const totalBooks = db.prepare('SELECT count(*) as count FROM books').get() as any;
+    const readingBooks = db.prepare('SELECT count(*) as count FROM books WHERE isReading = 1').get() as any;
+    const completedBooks = db.prepare('SELECT count(*) as count FROM books WHERE status = "archived"').get() as any;
+    
+    res.json({
+      total: totalBooks.count,
+      reading: readingBooks.count,
+      completed: completedBooks.count,
+      uptime: process.uptime()
+    });
   });
 
   // KOReader Sync Protocol Endpoints

@@ -3,7 +3,7 @@ import re
 import sys
 
 def migrate():
-    print("Migrating Sake to Non-Docker setup...")
+    print("Migrating Wilder to Non-Docker setup...")
     
     # 1. Update .env.example or create .env
     env_file = ".env"
@@ -16,7 +16,7 @@ def migrate():
     
     # Replacement patterns for Docker -> Local
     replacements = [
-        (r"DATABASE_URL=.*", "DATABASE_URL=\"file:./sake.db\""),
+        (r"DATABASE_URL=.*", "DATABASE_URL=\"file:./wilder.db\""),
         (r"STORAGE_TYPE=.*", "STORAGE_TYPE=\"local\""),
         (r"S3_.*=.*", "# S3 variables disabled for non-docker setup"),
         (r"USER_ID=.*", "USER_ID=\"1000\""), # Typical default

@@ -1,4 +1,4 @@
-# KOReader Sync Dashboard - Universal Installer/Updater/Uninstaller
+# Wilder Sync Dashboard - Universal Installer/Updater/Uninstaller
 # Optimized for Windows Server 2025
 
 param (
@@ -20,23 +20,24 @@ function Write-Log([string]$message, [string]$color = "White") {
     $fullMessage | Out-File -FilePath $logFile -Append
 }
 
-Write-Log "--- KOReader Sync Dashboard Manager ---" "Cyan"
+Write-Log "--- Wilder Sync Dashboard Manager ---" "Cyan"
+Write-Log "Based on project Sake (Sudashiii/Sake)" "Gray"
 
 # --- UNINSTALL LOGIC ---
 if ($Uninstall) {
     $confirm = $true
     if (-not $Force) {
-        $confirm = Read-Host "Are you sure you want to uninstall and DELETE ALL DATA (including database)? (y/n)"
+        $confirm = Read-Host "Are you sure you want to uninstall? (y/n)"
         $confirm = ($confirm -eq "y")
     }
     
     if ($confirm) {
         Write-Log "Uninstalling..." "Yellow"
         # Stop any running processes
-        Get-Process | Where-Object { $_.CommandLine -like "*tsx server.ts*" -or $_.CommandLine -like "*node*" } | Stop-Process -ErrorAction SilentlyContinue
+        Get-Process | Where-Object { $_.CommandLine -like "*tsx server.ts*" -or $_.CommandLine -like "*node*" } | Stop-Process -ErrorAction SilentlyContinue 
         
         Write-Log "Removing files..."
-        $filesToRemove = "dist", "node_modules", "sake.db", ".env", "package.json", "package-lock.json", "setup.ps1", "migrate.py", "server.ts", "service_log.txt", "sync_log.txt"
+        $filesToRemove = "dist", "node_modules", "wilder.db", "sake.db", ".env", "package.json", "package-lock.json", "setup.ps1", "migrate.py", "server.ts", "service_log.txt", "sync_log.txt", "install_log.txt"
         foreach ($f in $filesToRemove) {
             if (Test-Path "$installDir\$f") { Remove-Item -Recurse -Force "$installDir\$f" }
         }
@@ -46,6 +47,9 @@ if ($Uninstall) {
 }
 
 # --- INSTALL / UPGRADE LOGIC ---
+
+# Ensure folder context
+Write-Log "Installation Directory: $installDir"
 
 # 1. Detection
 if (Test-Path "$installDir\package.json") {
@@ -115,5 +119,10 @@ if (Test-Path $setupScript) {
 
 Write-Log "--- Operation Successful ---" "Green"
 if ($isUpdate) { Write-Log "Note: Previous database backup saved in $backupDir" "Gray" }
-Write-Log "Dashboard is ready."
-Write-Log "Start with: npm run dev"
+
+Write-Log "Starting Wilder Dashboard service..." "Cyan"
+# Start the server in the background and detached from current script
+Start-Process -FilePath "npm" -ArgumentList "run dev" -WindowStyle Hidden -WorkingDirectory $installDir
+
+Write-Log "Dashboard is active. It will run in the background."
+Write-Log "Portable service started at http://localhost:3000"

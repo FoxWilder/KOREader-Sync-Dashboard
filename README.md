@@ -1,10 +1,11 @@
-# 📚 KOReader Sync Dashboard
+# 📚 Wilder Sync Dashboard
+*(Forked from [Sudashiii/Sake](https://github.com/Sudashiii/Sake))*
 
-A polished, **Docker-free** fork of [Sudashiii/Sake](https://github.com/Sudashiii/Sake) optimized for Windows Server 2025. This project provides a clean web library, KOReader progress syncing, and book provider imports without the complexity of Docker.
+A polished, **Docker-free** reading stack optimized for Windows Server 2025. This project provides a clean web library, KOReader progress syncing, and book management without the complexity of Docker.
 
-## 🚀 One-Line Installation / Upgrade / Uninstall
+## 🚀 One-Line Installation
 
-Run the following command in PowerShell in the folder where you want to manage the dashboard:
+**IMPORTANT**: Open PowerShell and `cd` into the folder where you want the installation files to be placed (e.g. `C:\Wilder`). Then run:
 
 ```powershell
 # Standard Install / Upgrade (Latest Release)

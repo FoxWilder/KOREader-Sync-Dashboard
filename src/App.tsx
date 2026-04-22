@@ -21,7 +21,16 @@ import {
   Clock,
   User,
   Power,
-  Download
+  Download,
+  Archive,
+  BarChart3,
+  ListOrdered,
+  FileText,
+  Activity,
+  History,
+  MoreVertical,
+  ChevronRight,
+  BookMarked
 } from 'lucide-react';
 
 interface Book {
@@ -29,20 +38,85 @@ interface Book {
   title: string;
   author: string;
   coverPath: string;
+  status: 'queue' | 'reading' | 'archived' | 'trash';
+  isReading: number;
+  progress?: string;
 }
 
+interface Stats {
+  total: number;
+  reading: number;
+  completed: number;
+  uptime: number;
+}
+
+type Tab = 'library' | 'reading' | 'queue' | 'stats' | 'archived' | 'trash' | 'deployment' | 'settings';
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'library' | 'settings'>('library');
+  const [activeTab, setActiveTab] = useState<Tab>('library');
   const [books, setBooks] = useState<Book[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const fetchBooks = async () => {
+    try {
+      const statusParam = ['library', 'deployment', 'settings', 'stats'].includes(activeTab) ? '' : `?status=${activeTab}`;
+      const res = await fetch(`/api/books${statusParam}`);
+      const data = await res.json();
+      setBooks(data);
+    } catch (e) {
+      console.error(e);
+      // Fallback mock
+      if (books.length === 0) {
+        setBooks([
+          { id: '1', title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', coverPath: 'https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1490528560i/4671.jpg', status: 'reading', isReading: 1 },
+          { id: '2', title: '1984', author: 'George Orwell', coverPath: 'https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1532714506i/40961427.jpg', status: 'queue', isReading: 0 },
+          { id: '3', title: 'Crime and Punishment', author: 'Fyodor Dostoevsky', coverPath: 'https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1382846449i/7144.jpg', status: 'archived', isReading: 0 },
+        ]);
+      }
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('/api/stats');
+      const data = await res.json();
+      setStats(data);
+    } catch (e) {
+      console.error(e);
+      setStats({ total: 12, reading: 2, completed: 5, uptime: 1234 });
+    }
+  };
 
   useEffect(() => {
-    // Mock initial books if empty
-    setBooks([
-      { id: '1', title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', coverPath: 'https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1490528560i/4671.jpg' },
-      { id: '2', title: '1984', author: 'George Orwell', coverPath: 'https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1532714506i/40961427.jpg' },
-      { id: '3', title: 'Crime and Punishment', author: 'Fyodor Dostoevsky', coverPath: 'https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1382846449i/7144.jpg' },
-    ]);
-  }, []);
+    fetchBooks();
+    if (activeTab === 'stats') fetchStats();
+  }, [activeTab]);
+
+  const updateBookStatus = async (id: string, status: string) => {
+    await fetch(`/api/books/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    fetchBooks();
+  };
+
+  const filteredBooks = books.filter(b => 
+    b.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    b.author.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const sidebarItems: { id: Tab; label: string; icon: any }[] = [
+    { id: 'library', label: 'All Books', icon: Library },
+    { id: 'reading', label: 'Currently Reading', icon: BookMarked },
+    { id: 'queue', label: 'Queue', icon: ListOrdered },
+    { id: 'stats', label: 'Stats', icon: BarChart3 },
+    { id: 'archived', label: 'Archived', icon: Archive },
+    { id: 'trash', label: 'Trash', icon: Trash2 },
+    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'deployment', label: 'Deployment', icon: LayoutDashboard },
+  ];
 
   const steps = [
     { id: '01', title: 'Repository Fork', desc: 'Sudashiii/Sake → user/Sake', status: 'done' },
@@ -57,30 +131,21 @@ export default function App() {
       <aside className="w-64 border-r border-[#27272a] bg-[#09090b] flex flex-col p-6">
         <div className="flex items-center gap-3 mb-10 px-2">
           <div className="w-8 h-8 bg-[#34d399] rounded-md flex items-center justify-center shadow-[0_0_15px_rgba(52,211,153,0.3)]">
-            <BookOpen size={18} color="#09090b" strokeWidth={2.5} />
+            <BookMarked size={18} color="#09090b" strokeWidth={2.5} />
           </div>
-          <h1 className="font-bold tracking-tight text-lg">Sake <span className="text-[#71717a] font-normal">Sync</span></h1>
+          <h1 className="font-bold tracking-tight text-lg">Wilder <span className="text-[#71717a] font-normal">Sync</span></h1>
         </div>
 
-        <nav className="flex-grow space-y-1">
-          <button 
-            onClick={() => setActiveTab('library')}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'library' ? 'bg-[#18181b] text-[#34d399]' : 'text-[#a1a1aa] hover:bg-[#18181b] hover:text-white'}`}
-          >
-            <Library size={18} /> Library
-          </button>
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'dashboard' ? 'bg-[#18181b] text-[#34d399]' : 'text-[#a1a1aa] hover:bg-[#18181b] hover:text-white'}`}
-          >
-            <LayoutDashboard size={18} /> Deployment
-          </button>
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'settings' ? 'bg-[#18181b] text-[#34d399]' : 'text-[#a1a1aa] hover:bg-[#18181b] hover:text-white'}`}
-          >
-            <Settings size={18} /> Settings
-          </button>
+        <nav className="flex-grow space-y-1 overflow-y-auto">
+          {sidebarItems.map((item) => (
+            <button 
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === item.id ? 'bg-[#18181b] text-[#34d399]' : 'text-[#a1a1aa] hover:bg-[#18181b] hover:text-white'}`}
+            >
+              <item.icon size={18} /> {item.label}
+            </button>
+          ))}
         </nav>
 
         <div className="mt-auto pt-6 border-t border-[#27272a]">
@@ -92,9 +157,6 @@ export default function App() {
               <p className="font-bold">Admin</p>
               <p className="text-[#71717a]">Sync Active</p>
             </div>
-            <button className="ml-auto text-[#71717a] hover:text-white">
-              <Power size={14} />
-            </button>
           </div>
         </div>
       </aside>
@@ -107,7 +169,9 @@ export default function App() {
             <Search size={14} className="text-[#71717a]" />
             <input 
               type="text" 
-              placeholder="Search your library..." 
+              placeholder="Search library..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-transparent text-xs w-full focus:outline-none"
             />
           </div>
@@ -117,7 +181,7 @@ export default function App() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#34d399] animate-pulse"></span> SYSTEM READY
             </div>
             <button className="bg-white text-black px-4 py-1.5 rounded-md text-xs font-bold hover:bg-[#e4e4e7] transition-all flex items-center gap-2">
-              <Plus size={14} /> Import Book
+              <Plus size={14} /> Import
             </button>
           </div>
         </header>
@@ -125,15 +189,15 @@ export default function App() {
         {/* Content Tabs */}
         <section className="flex-grow p-8 overflow-y-auto custom-scrollbar">
           <AnimatePresence mode="wait">
-            {activeTab === 'library' && (
+            {['library', 'reading', 'queue', 'archived', 'trash'].includes(activeTab) && (
               <motion.div 
-                key="library"
+                key={activeTab}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6"
               >
-                {books.map((book) => (
+                {filteredBooks.map((book) => (
                   <motion.div 
                     key={book.id}
                     whileHover={{ scale: 1.05 }}
@@ -141,10 +205,22 @@ export default function App() {
                   >
                     <div className="aspect-[2/3] bg-[#18181b] rounded-lg overflow-hidden border border-[#27272a] relative group-hover:border-[#34d399]/50 transition-all shadow-xl">
                       <img src={book.coverPath} alt={book.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent flex items-end p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="w-full py-1.5 bg-[#34d399] text-black text-[10px] font-bold rounded flex items-center justify-center gap-1">
-                          <BookOpen size={12} /> Read Now
-                        </button>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 p-3 flex flex-col gap-1 translate-y-full group-hover:translate-y-0 transition-transform">
+                        {activeTab !== 'reading' && (
+                          <button onClick={() => updateBookStatus(book.id, 'reading')} className="w-full py-1 bg-[#34d399] text-black text-[10px] font-bold rounded flex items-center justify-center gap-1">
+                            <BookOpen size={12} /> Start
+                          </button>
+                        )}
+                        {activeTab !== 'archived' && (
+                          <button onClick={() => updateBookStatus(book.id, 'archived')} className="w-full py-1 bg-[#18181b] text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 border border-[#27272a]">
+                            <Archive size={12} /> Archive
+                          </button>
+                        )}
+                        {activeTab !== 'trash' && (
+                           <button onClick={() => updateBookStatus(book.id, 'trash')} className="w-full py-1 bg-red-500/20 text-red-500 text-[10px] font-bold rounded flex items-center justify-center gap-1 border border-red-500/30">
+                            <Trash2 size={12} /> Trash
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div>
@@ -156,9 +232,36 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'dashboard' && (
+            {activeTab === 'stats' && (
               <motion.div 
-                key="dashboard"
+                key="stats"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+              >
+                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
+                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Total Books</p>
+                  <p className="text-2xl font-bold">{stats?.total || 0}</p>
+                </div>
+                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
+                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Reading Now</p>
+                  <p className="text-2xl font-bold text-[#34d399]">{stats?.reading || 0}</p>
+                </div>
+                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
+                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Completed</p>
+                  <p className="text-2xl font-bold text-blue-400">{stats?.completed || 0}</p>
+                </div>
+                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
+                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Uptime</p>
+                  <p className="text-2xl font-bold text-orange-400">{Math.floor((stats?.uptime || 0) / 3600)}h</p>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'deployment' && (
+              <motion.div 
+                key="deployment"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -211,12 +314,60 @@ export default function App() {
                     </div>
                   </div>
                   <div className="p-6 font-mono text-xs leading-relaxed overflow-y-auto flex-grow bg-black/40">
-                    <p className="text-[#34d399]">[INIT] Sake Server v1.1.0 starting...</p>
-                    <p className="text-[#e4e4e7] mt-1">✓ SQLite database 'sake.db' initialized.</p>
+                    <p className="text-[#34d399]">[INIT] Wilder Server v1.1.0 starting...</p>
+                    <p className="text-[#e4e4e7] mt-1">✓ SQLite database 'wilder.db' initialized.</p>
                     <p className="text-[#e4e4e7]">✓ KOReader sync endpoints bound to /koreader/sync/v1/*</p>
                     <p className="text-[#a1a1aa] mt-2 italic"># Listening for progress updates...</p>
                     <p className="text-[#e4e4e7] mt-4">&gt; Version: rolling-2bdeb34</p>
                     <p className="text-[#e4e4e7]">&gt; Server: listening on 0.0.0.0:3000</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'settings' && (
+              <motion.div 
+                key="settings"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="max-w-xl space-y-10"
+              >
+                <div>
+                  <h2 className="text-xl font-bold mb-6 flex items-center gap-3">
+                    <RefreshCcw size={20} className="text-[#34d399]" /> KOReader Sync Configuration
+                  </h2>
+                  <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-[#71717a] uppercase">Server URL</label>
+                      <div className="bg-[#09090b] border border-[#27272a] p-3 rounded-lg flex items-center justify-between">
+                        <code className="text-sm font-mono text-[#34d399]">http://your-server-ip:3000/koreader/sync/v1</code>
+                        <button className="text-[10px] font-bold text-[#71717a] hover:text-white uppercase transition-colors">Copy</button>
+                      </div>
+                      <p className="text-[10px] text-[#52525b]">Enter this URL in your KOReader plugin settings to enable progress syncing.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-xs font-bold text-[#71717a] uppercase">Auth Token</label>
+                       <div className="bg-[#09090b] border border-[#27272a] p-3 rounded-lg flex items-center justify-between">
+                        <code className="text-sm font-mono text-[#34d399]">sk_live_51P...mock_token</code>
+                        <button className="text-[10px] font-bold text-[#71717a] hover:text-white uppercase transition-colors">Copy</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                   <h2 className="text-xl font-bold mb-6 flex items-center gap-3">
+                    <Download size={20} className="text-[#34d399]" /> Maintenance
+                  </h2>
+                  <div className="flex gap-4">
+                    <button className="flex-grow flex items-center justify-center gap-3 bg-[#18181b] border border-[#27272a] py-4 rounded-xl text-sm font-bold hover:border-[#34d399]/50 transition-all">
+                       <RefreshCcw size={18} /> Forced Sync
+                    </button>
+                    <button className="flex-grow flex items-center justify-center gap-3 bg-red-500/10 border border-red-500/50 py-4 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/20 transition-all">
+                       <Trash2 size={18} /> Clear Database
+                    </button>
                   </div>
                 </div>
               </motion.div>

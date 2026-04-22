@@ -48,7 +48,7 @@ jobs:
       - name: Prepare Release ZIP
         run: |
           mkdir -p release
-          cp -r package.json package-lock.json setup.ps1 migrate.py check_environment.py release/
+          cp -r package.json package-lock.json setup.ps1 migrate.py check_environment.py server.ts release/
           [ -d build ] && cp -r build release/ || true
           [ -d dist ] && cp -r dist release/ || true
           [ -d .svelte-kit ] && cp -r .svelte-kit release/ || true

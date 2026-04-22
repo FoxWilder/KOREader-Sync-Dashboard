@@ -1,7 +1,8 @@
-# Sake Non-Docker Setup Script
-# This script sets up the Sake reading stack without Docker.
+# Wilder Non-Docker Setup Script
+# This script sets up the Wilder reading stack (forked from Sake) without Docker.
 
-Write-Host "--- Sake Setup Starting ---" -ForegroundColor Cyan
+Write-Host "--- Wilder Setup Starting ---" -ForegroundColor Cyan
+Write-Log "Setup started"
 
 # 1. Prerequisite Checks
 Write-Host "Checking prerequisites..."
@@ -31,9 +32,10 @@ if ($LASTEXITCODE -ne 0) { Write-Error "NPM install failed."; exit 1 }
 
 # 4. Database Setup (Drizzle)
 Write-Host "Initializing database..."
-npm run db:push -ErrorAction SilentlyContinue # Try to push schema
+# Corrected: Do not pass -ErrorAction SilentlyContinue to npm, as it is an external command
+npm run db:push
 if ($LASTEXITCODE -ne 0) { 
-    Write-Host "Note: Database push failed. You might need to manually run 'npx drizzle-kit push:sqlite' if current scripts are docker-bound." -ForegroundColor Yellow
+    Write-Host "Note: Database push failed. Ensure 'wilder.db' is accessible." -ForegroundColor Yellow
 }
 
 # 5. Done
