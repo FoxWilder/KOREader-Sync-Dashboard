@@ -28,59 +28,60 @@ async function startServer() {
   const PORT = 3000;
   
   logToFile('service_log.txt', `Attempting to initialize database at ${path.join(process.cwd(), 'wilder.db')}...`);
-  const db = new Database('wilder.db');
-  logToFile('service_log.txt', 'Database connection established.');
+  try {
+    const db = new Database('wilder.db', { verbose: (msg) => logToFile('service_log.txt', `DB: ${msg}`) });
+    logToFile('service_log.txt', 'Database connection established.');
 
-  // service_log.txt for general web requests
-  app.use((req, res, next) => {
-    if (!req.path.startsWith('/koreader')) {
-      logToFile('service_log.txt', `${req.method} ${req.path} - ${req.ip}`);
-    }
-    next();
-  });
+    // service_log.txt for general web requests
+    app.use((req, res, next) => {
+      if (!req.path.startsWith('/koreader')) {
+        logToFile('service_log.txt', `${req.method} ${req.path} - ${req.ip}`);
+      }
+      next();
+    });
 
-  // sync_log.txt exclusively for KOReader sync
-  app.use('/koreader', (req, res, next) => {
-    logToFile('sync_log.txt', `${req.method} ${req.path} - ${JSON.stringify(req.body || {})}`);
-    next();
-  });
+    // sync_log.txt exclusively for KOReader sync
+    app.use('/koreader', (req, res, next) => {
+      logToFile('sync_log.txt', `${req.method} ${req.path} - ${JSON.stringify(req.body || {})}`);
+      next();
+    });
 
-  // Initialize DB tables
-  logToFile('service_log.txt', 'Initializing database tables...');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE,
-      password TEXT
-    );
-    CREATE TABLE IF NOT EXISTS books (
-      id TEXT PRIMARY KEY,
-      title TEXT,
-      author TEXT,
-      filePath TEXT,
-      coverPath TEXT,
-      status TEXT DEFAULT 'queue', -- queue, reading, archived, trash
-      progress TEXT,
-      isReading INTEGER DEFAULT 0,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS sync_data (
-      userId TEXT,
-      documentId TEXT,
-      progress TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (userId, documentId)
-    );
-  `);
-  logToFile('service_log.txt', 'Database tables initialized.');
+    // Initialize DB tables
+    logToFile('service_log.txt', 'Initializing database tables...');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE,
+        password TEXT
+      );
+      CREATE TABLE IF NOT EXISTS books (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        author TEXT,
+        filePath TEXT,
+        coverPath TEXT,
+        status TEXT DEFAULT 'queue', -- queue, reading, archived, trash
+        progress TEXT,
+        isReading INTEGER DEFAULT 0,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS sync_data (
+        userId TEXT,
+        documentId TEXT,
+        progress TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (userId, documentId)
+      );
+    `);
+    logToFile('service_log.txt', 'Database tables initialized.');
 
-  app.use(express.json());
+    app.use(express.json());
 
-  // Serve static assets (covers, books)
-  app.use('/data', express.static(path.join(process.cwd(), 'data')));
+    // Serve static assets (covers, books)
+    app.use('/data', express.static(path.join(process.cwd(), 'data')));
 
-  // --- API ROUTES ---
-  logToFile('service_log.txt', 'Setting up API routes...');
+    // --- API ROUTES ---
+    logToFile('service_log.txt', 'Setting up API routes...');
 
   // Auth - Simplified for now
   app.post('/api/auth/login', (req, res) => {
@@ -203,6 +204,11 @@ async function startServer() {
     logToFile('service_log.txt', `Server successfully listening on http://0.0.0.0:${PORT}`);
     console.log(`Server running on http://localhost:${PORT}`);
   });
+  } catch (err) {
+    logToFile('service_log.txt', `CRITICAL ERROR during startup: ${err}`);
+    console.error('Critical boot error:', err);
+    process.exit(1);
+  }
 }
 
 startServer().catch(err => {

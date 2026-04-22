@@ -22,25 +22,22 @@ This project is built from the ground up to run directly on Windows:
 *   **Standard Protocol**: Implements the official KOReader Sync v1 protocol for maximum compatibility.
 *   **Auth Privacy**: Secure tokens for private synchronization without third-party cloud dependency.
 
-## 🚀 One-Line Installation
+## 🚀 Quick Install / Upgrade / Switch Version
+Open PowerShell in your desired installation folder and run the command below.
 
-**IMPORTANT**: Open PowerShell and `cd` into the folder where you want the installation files to be placed (e.g. `C:\Wilder`). **The manager will install all files into the current working directory.**
-
+**Standard Install (Latest):**
 ```powershell
-# Standard Install / Upgrade (Latest Release)
 iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1 | iex
 ```
 
-### 💎 Switching Between Versions
-
-You can easily roll forward or backward by specifying the version tag (e.g., `v1.0.1`) or a rolling commit hash (e.g., `rolling-20260422-b1d75cf`):
-
+**Switch to Specific Version (e.g., v1.1.0 or rolling hash):**
 ```powershell
-# Install a specific tagged version
-$v = "v1.0.0"; iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1 | iex -Arguments "-Version $v"
+& { (iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1).Content | iex } -Version "v1.1.0"
+```
 
-# Install a specific rolling release (from CI/CD)
-$v = "rolling-20260422-b1d75cf"; iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1 | iex -Arguments "-Version $v"
+**Uninstall everything:**
+```powershell
+& { (iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1).Content | iex } -Uninstall
 ```
 
 ## ✨ Tech Stack (Non-Docker)

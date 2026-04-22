@@ -65,16 +65,16 @@ Write-Log "Fetching version information ($Version) from GitHub..."
 try {
     $releaseUrl = ""
     if ($Version -eq "latest") {
-        # Fetch all releases and pick top one (more reliable than /latest if only Drafts exist)
+        # Fetch all releases and sort by published_at DESC to find the true latest
         $releaseUrl = "https://api.github.com/repos/$repo/releases"
-        $releases = Invoke-RestMethod -Uri $releaseUrl
-        if ($releases.Count -eq 0) {
-            Write-Error "No releases found in repository $repo. Please wait for the GitHub Action to complete or create a tag."
-            Write-Log "CRITICAL: No releases found." "Red"
+        $allReleases = Invoke-RestMethod -Uri $releaseUrl
+        if ($allReleases.Count -eq 0) {
+            Write-Error "No releases found in repository $repo."
             exit 1
         }
-        $releaseInfo = $releases[0] # Take the most recent release
+        $releaseInfo = $allReleases | Sort-Object published_at -Descending | Select-Object -First 1
     } else {
+        # Fetch specific tag
         $releaseUrl = "https://api.github.com/repos/$repo/releases/tags/$Version"
         $releaseInfo = Invoke-RestMethod -Uri $releaseUrl
     }

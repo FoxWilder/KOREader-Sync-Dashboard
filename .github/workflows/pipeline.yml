@@ -42,7 +42,8 @@ jobs:
           if [[ $GITHUB_REF == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "tag=rolling-$(date +'%Y%m%d')-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+            # Prepend date and high-precision time for strict sorting
+            echo "tag=rolling-$(date +'%Y%m%d-%H%M%S')-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
           fi
 
       - name: Prepare Release ZIP
