@@ -59,6 +59,10 @@ interface Stats {
   total: number;
   reading: number;
   completed: number;
+  authors: number;
+  formats: { format: string; count: number }[];
+  size: number;
+  categories: number;
   uptime: number;
 }
 
@@ -215,7 +219,8 @@ export default function App() {
         const width = window.innerWidth;
         const sidebarWidth = width >= 768 ? 256 : 80;
         const availableWidth = width - sidebarWidth - 80; // Main section padding
-        const cols = Math.max(1, Math.floor(availableWidth / 250));
+        // Aiming for 4-5 cards by decreasing the divisor
+        const cols = Math.max(1, Math.floor(availableWidth / 200));
         setColumns(cols);
       });
     };
@@ -484,8 +489,8 @@ export default function App() {
                     <VGrid
                       row={Math.max(1, Math.ceil(filteredBooks.length / columns))}
                       col={columns}
-                      cellHeight={400}
-                      cellWidth={250}
+                      cellHeight={320}
+                      cellWidth={Math.floor((window.innerWidth - (window.innerWidth >= 768 ? 256 : 80) - 80) / columns)}
                       className="h-full p-8 scrollbar-hide"
                     >
                       {({ rowIndex, colIndex }) => {
@@ -496,51 +501,44 @@ export default function App() {
                         const percentage = progress?.percentage || 0;
 
                         return (
-                          <div className="p-4 h-full">
+                          <div className="p-3 h-full">
                             <motion.div 
-                              whileHover={{ y: -10 }}
+                              whileHover={{ y: -8 }}
                               onClick={() => setSelectedBook(book)}
-                              className="group flex flex-col gap-5 cursor-pointer h-full"
+                              className="group flex flex-col gap-3 cursor-pointer h-full"
                             >
-                              <div className="aspect-[2/3] bg-[#0d0d0f] rounded-[2rem] border border-white/5 relative group-hover:border-[#34d399]/40 transition-all shadow-[0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden">
+                              <div className="aspect-[3/4] bg-[#0d0d0f] rounded-2xl border border-white/5 relative group-hover:border-[#34d399]/40 transition-all shadow-xl overflow-hidden shrink-0">
                                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 
                                 {covers[book.id] ? (
-                                  <img src={covers[book.id]} alt={book.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                  <img src={covers[book.id]} alt={book.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                                 ) : (
-                                  <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center gap-4 bg-gradient-to-br from-[#0d0d0f] to-[#16161a]">
-                                    <BookOpen size={40} className="text-[#34d399]/10" strokeWidth={1.5} />
-                                    <p className="text-[9px] text-[#3f3f46] font-black uppercase tracking-[.3em] leading-normal opacity-50">Cover<br/>Redacted</p>
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center gap-2 bg-gradient-to-br from-[#0d0d0f] to-[#16161a]">
+                                    <BookOpen size={24} className="text-[#34d399]/10" strokeWidth={1.5} />
+                                    <p className="text-[8px] text-[#3f3f46] font-black uppercase tracking-[.2em] leading-normal opacity-50">No Cover</p>
                                   </div>
                                 )}
                                 
                                 {percentage > 0 && (
-                                  <div className="absolute top-0 left-0 w-full h-2 bg-black/60 backdrop-blur-md z-20 overflow-hidden">
+                                  <div className="absolute top-0 left-0 w-full h-1 bg-black/60 backdrop-blur-md z-20 overflow-hidden">
                                     <motion.div 
                                       initial={{ width: 0 }}
                                       animate={{ width: `${percentage}%` }}
-                                      className="h-full bg-gradient-to-r from-[#34d399] to-[#10b981] shadow-[0_0_20px_rgba(52,211,153,0.6)]" 
+                                      className="h-full bg-gradient-to-r from-[#34d399] to-[#10b981]" 
                                     />
                                   </div>
                                 )}
 
-                                <div className="absolute bottom-5 right-5 z-20 flex flex-col gap-2 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
-                                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 px-3 py-1.5 rounded-xl text-[9px] font-black text-white uppercase tracking-widest shadow-2xl">
+                                <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-2 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 px-2 py-1 rounded-lg text-[8px] font-black text-white uppercase tracking-widest">
                                     {book.format}
                                   </div>
                                 </div>
                               </div>
                               
-                              <div className="space-y-1.5 px-2">
-                                <h3 className="text-sm font-black truncate text-white tracking-tight leading-tight group-hover:text-[#34d399] transition-colors">{book.title}</h3>
-                                <div className="flex items-center justify-between">
-                                  <p className="text-[10px] text-[#52525b] font-black truncate max-w-[75%] uppercase tracking-tighter opacity-80">{book.author}</p>
-                                  {percentage > 0 && (
-                                    <span className="text-[10px] font-black text-[#34d399] tracking-tighter shadow-[#34d399]/20 shadow-sm px-1.5 bg-[#34d399]/5 rounded">
-                                      {Math.round(percentage)}%
-                                    </span>
-                                  )}
-                                </div>
+                              <div className="space-y-1 overflow-hidden">
+                                <h3 className="text-xs font-black truncate text-white tracking-tight leading-tight group-hover:text-[#34d399] transition-colors">{book.title}</h3>
+                                <p className="text-[9px] text-[#52525b] font-black truncate uppercase tracking-tighter opacity-80">{book.author}</p>
                               </div>
                             </motion.div>
                           </div>
@@ -662,8 +660,11 @@ export default function App() {
                       </div>
                       
                       <div className="flex gap-4 mt-auto">
-                        <button className="flex-grow flex items-center justify-center gap-3 bg-[#34d399] text-black h-16 rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_20px_40px_-10px_rgba(52,211,153,0.3)]">
-                          <BookOpen size={18} /> Continue Reading
+                        <button 
+                          onClick={() => updateBookStatus(selectedBook.id, selectedBook.status === 'reading' ? 'library' : 'reading')}
+                          className="flex-grow flex items-center justify-center gap-3 bg-[#34d399] text-black h-16 rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_20px_40px_-10px_rgba(52,211,153,0.3)]"
+                        >
+                          <Zap size={18} /> {selectedBook.status === 'reading' ? 'Clear Reading Status' : 'Mark as Reading'}
                         </button>
                       </div>
                     </div>
@@ -712,51 +713,55 @@ export default function App() {
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: idx * 0.1 }}
-                      className="bg-[#111114] border border-white/5 rounded-[2rem] p-8 relative group overflow-hidden shadow-2xl"
+                      className="bg-[#111114] border border-white/5 rounded-[2rem] p-8 relative group overflow-hidden shadow-2xl flex flex-col h-full min-h-[400px]"
                     >
                       <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
                          <Github size={120} />
                       </div>
 
-                      <div className="flex items-start justify-between mb-8">
-                        <div>
+                      <div className="flex items-start justify-between mb-8 shrink-0">
+                        <div className="h-14">
                           <p className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.4em] mb-2">Repository</p>
-                          <h3 className="text-xl font-black text-white">{item.repo}</h3>
+                          <h3 className="text-xl font-black text-white truncate max-w-[300px]">{item.repo}</h3>
                         </div>
                         <div className="flex gap-2">
                            <button 
                             onClick={() => removeNewsRepo(item.repo)}
-                            className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-red-500/50 hover:text-red-500 hover:bg-white/10 transition-all"
+                            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-red-500/50 hover:text-red-500 hover:bg-white/10 transition-all border border-white/5"
                            >
-                             <Trash2 size={14} />
+                             <Trash2 size={16} />
                            </button>
                         </div>
                       </div>
 
-                      <div className="bg-black/40 rounded-2xl p-6 border border-white/5 mb-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <Zap size={16} className="text-orange-400" />
-                            <span className="text-sm font-black text-orange-400">{item.latest.tag_name}</span>
+                      <div className="bg-black/40 rounded-2xl p-6 border border-white/5 flex-grow mb-8 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-4 h-6">
+                            <div className="flex items-center gap-3">
+                              <Zap size={16} className="text-orange-400" />
+                              <span className="text-sm font-black text-orange-400">{item.latest.tag_name}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-[#52525b] uppercase">
+                              {new Date(item.latest.published_at).toLocaleDateString()}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-bold text-[#52525b] uppercase">
-                            {new Date(item.latest.published_at).toLocaleDateString()}
-                          </span>
+                          <h4 className="text-sm font-black text-white mb-3 line-clamp-1">{item.latest.name}</h4>
+                          <p className="text-xs text-[#71717a] line-clamp-4 leading-relaxed overflow-hidden">
+                            {item.latest.body.replace(/[#*`]/g, '')}
+                          </p>
                         </div>
-                        <h4 className="text-sm font-black text-white mb-3">{item.latest.name}</h4>
-                        <p className="text-xs text-[#71717a] line-clamp-3 leading-relaxed">
-                          {item.latest.body.replace(/[#*`]/g, '')}
-                        </p>
                       </div>
 
-                      <a 
-                        href={item.latest.html_url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 text-[10px] font-black text-[#34d399] uppercase tracking-widest hover:translate-x-2 transition-transform"
-                      >
-                        View Release Intel <ChevronRight size={14} />
-                      </a>
+                      <div className="shrink-0">
+                        <a 
+                          href={item.latest.html_url} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 text-[10px] font-black text-[#34d399] uppercase tracking-widest hover:translate-x-2 transition-transform"
+                        >
+                          View Intel Dossier <ChevronRight size={14} />
+                        </a>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
@@ -769,23 +774,82 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+                className="space-y-12"
               >
-                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
-                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Total Books</p>
-                  <p className="text-2xl font-bold">{stats?.total || 0}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                  {[
+                    { label: 'Intelligence Base', value: stats?.total || 0, sub: 'Total Records', color: 'text-white', icon: Library },
+                    { label: 'Active Sessions', value: stats?.reading || 0, sub: 'Deep Reading', color: 'text-[#34d399]', icon: BookMarked },
+                    { label: 'Knowledge Vault', value: stats?.completed || 0, sub: 'Archived Docs', color: 'text-blue-400', icon: Archive },
+                    { label: 'Synapse Uptime', value: `${Math.floor((stats?.uptime || 0) / 3600)}h`, sub: 'Server Cycles', color: 'text-orange-400', icon: Zap },
+                  ].map((stat, i) => (
+                    <motion.div 
+                      key={i}
+                      initial={{ scale: 0.95, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="bg-[#111114] border border-white/5 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden group"
+                    >
+                      <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                         <stat.icon size={120} />
+                      </div>
+                      <p className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.3em] mb-4">{stat.label}</p>
+                      <p className={`text-4xl font-black tracking-tighter ${stat.color} mb-2`}>{stat.value}</p>
+                      <p className="text-[10px] font-bold text-[#3f3f46] uppercase">{stat.sub}</p>
+                    </motion.div>
+                  ))}
                 </div>
-                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
-                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Reading Now</p>
-                  <p className="text-2xl font-bold text-[#34d399]">{stats?.reading || 0}</p>
-                </div>
-                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
-                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Completed</p>
-                  <p className="text-2xl font-bold text-blue-400">{stats?.completed || 0}</p>
-                </div>
-                <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6">
-                  <p className="text-[10px] font-bold text-[#71717a] uppercase mb-1">Uptime</p>
-                  <p className="text-2xl font-bold text-orange-400">{Math.floor((stats?.uptime || 0) / 3600)}h</p>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="bg-[#111114] border border-white/5 rounded-[2.5rem] p-10">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-[#52525b] mb-8 flex items-center gap-3">
+                      <div className="w-2 h-2 bg-[#34d399] rounded-full" /> Library Composition
+                    </h3>
+                    <div className="grid grid-cols-2 gap-8">
+                      <div className="space-y-6">
+                        <div>
+                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Total Storage</p>
+                          <p className="text-2xl font-black text-white italic">
+                            {((stats?.size || 0) / (1024 * 1024 * 1024)).toFixed(2)} <span className="text-sm opacity-30 not-italic">GB</span>
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Creative Minds</p>
+                          <p className="text-2xl font-black text-white italic">
+                            {stats?.authors || 0} <span className="text-sm opacity-30 not-italic">Authors</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-6">
+                        <div>
+                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Taxonomy</p>
+                          <p className="text-2xl font-black text-white italic">
+                            {stats?.categories || 0} <span className="text-sm opacity-30 not-italic">Categories</span>
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Data Formats</p>
+                          <div className="flex flex-wrap gap-2">
+                            {stats?.formats?.map(f => (
+                              <span key={f.format} className="px-3 py-1 bg-white/5 border border-white/5 rounded-full text-[9px] font-black text-[#52525b] uppercase tracking-tighter">
+                                {f.format}: {f.count}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-[#34d399]/5 to-transparent border border-[#34d399]/10 rounded-[2.5rem] p-10 flex flex-col justify-center items-center text-center">
+                    <div className="w-20 h-20 bg-[#34d399] rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(52,211,153,0.3)]">
+                       <Activity size={40} className="text-black" />
+                    </div>
+                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4 italic">System Pulse <span className="text-[#34d399]">Optimal</span></h3>
+                    <p className="text-sm text-[#71717a] font-medium max-w-sm leading-relaxed">
+                      Wilder Sync is monitoring your intelligence base across {stats?.authors || 0} authors and {stats?.categories || 0} sectors of knowledge.
+                    </p>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -796,7 +860,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="max-w-2xl space-y-10"
+                className="max-w-4xl space-y-12 pb-20"
               >
                 <div>
                   <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-orange-400">

@@ -189,23 +189,25 @@ async function startServer() {
                     ebookDate = getMeta('date') || '';
                     ebookLang = getMeta('language') || '';
                     
+                    const ebookSubject = getMeta('subject') || '';
+                    
                     // Basic HTML tag removal for description
                     ebookDesc = ebookDesc.replace(/<[^>]*>/g, '');
+
+                    const exists = db.prepare('SELECT id FROM books WHERE filePath = ?').get(fullPath);
+                    if (!exists) {
+                      db.prepare(`
+                        INSERT INTO books (id, title, author, description, publisher, publishedDate, language, subject, filePath, coverPath, size, format, status) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      `).run(randomUUID(), ebookTitle, ebookAuthor, ebookDesc, ebookPub, ebookDate, ebookLang, ebookSubject, fullPath, coverPath, stats.size, path.extname(file).slice(1), 'library');
+                      logToFile('service_log.txt', `Indexed new book: ${ebookTitle} by ${ebookAuthor}`);
+                    }
                   }
                 }
               }
             }
           } catch (e) {
             logToFile('service_log.txt', `Meta extraction failed for ${file}: ${e}`);
-          }
-
-          const exists = db.prepare('SELECT id FROM books WHERE filePath = ?').get(fullPath);
-          if (!exists) {
-            db.prepare(`
-              INSERT INTO books (id, title, author, description, publisher, publishedDate, language, filePath, coverPath, size, format, status) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(randomUUID(), ebookTitle, ebookAuthor, ebookDesc, ebookPub, ebookDate, ebookLang, fullPath, coverPath, stats.size, path.extname(file).slice(1), 'library');
-            logToFile('service_log.txt', `Indexed new book: ${ebookTitle} by ${ebookAuthor}`);
           }
         }
       }
@@ -404,11 +406,19 @@ async function startServer() {
     const totalBooks = db.prepare('SELECT count(*) as count FROM books').get() as any;
     const readingBooks = db.prepare('SELECT count(*) as count FROM books WHERE isReading = 1').get() as any;
     const completedBooks = db.prepare('SELECT count(*) as count FROM books WHERE status = "archived"').get() as any;
+    const uniqueAuthors = db.prepare('SELECT count(DISTINCT author) as count FROM books').get() as any;
+    const formats = db.prepare('SELECT format, count(*) as count FROM books GROUP BY format').all() as any[];
+    const totalSize = db.prepare('SELECT sum(size) as sum FROM books').get() as any;
+    const categories = db.prepare('SELECT count(DISTINCT subject) as count FROM books WHERE subject IS NOT NULL AND subject != ""').get() as any;
     
     res.json({
       total: totalBooks.count,
       reading: readingBooks.count,
       completed: completedBooks.count,
+      authors: uniqueAuthors.count,
+      formats: formats,
+      size: totalSize.sum || 0,
+      categories: categories.count,
       uptime: process.uptime()
     });
   });
