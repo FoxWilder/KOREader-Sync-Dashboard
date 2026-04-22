@@ -10,8 +10,17 @@ param (
 $repo = "FoxWilder/KOReader-Sync-Dashboard"
 $installDir = Get-Location
 $setupScript = "setup.ps1"
+$logFile = "$installDir\install_log.txt"
 
-Write-Host "--- KOReader Sync Dashboard Manager ---" -ForegroundColor Cyan
+# --- LOGGING WRAPPER ---
+function Write-Log([string]$message, [string]$color = "White") {
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $fullMessage = "[$timestamp] $message"
+    Write-Host $message -ForegroundColor $color
+    $fullMessage | Out-File -FilePath $logFile -Append
+}
+
+Write-Log "--- KOReader Sync Dashboard Manager ---" "Cyan"
 
 # --- UNINSTALL LOGIC ---
 if ($Uninstall) {
@@ -22,16 +31,16 @@ if ($Uninstall) {
     }
     
     if ($confirm) {
-        Write-Host "Uninstalling..." -ForegroundColor Yellow
-        # Stop any running processes? (Optional but recommended)
-        Get-Process | Where-Object { $_.CommandLine -like "*vite*" -or $_.CommandLine -like "*node*" } | Stop-Process -ErrorAction SilentlyContinue
+        Write-Log "Uninstalling..." "Yellow"
+        # Stop any running processes
+        Get-Process | Where-Object { $_.CommandLine -like "*tsx server.ts*" -or $_.CommandLine -like "*node*" } | Stop-Process -ErrorAction SilentlyContinue
         
-        Write-Host "Removing files..."
-        $filesToRemove = "dist", "node_modules", "sake.db", ".env", "package.json", "package-lock.json", "setup.ps1", "migrate.py"
+        Write-Log "Removing files..."
+        $filesToRemove = "dist", "node_modules", "sake.db", ".env", "package.json", "package-lock.json", "setup.ps1", "migrate.py", "server.ts", "service_log.txt", "sync_log.txt"
         foreach ($f in $filesToRemove) {
             if (Test-Path "$installDir\$f") { Remove-Item -Recurse -Force "$installDir\$f" }
         }
-        Write-Host "Uninstall complete." -ForegroundColor Green
+        Write-Log "Uninstall complete." "Green"
     }
     exit
 }
@@ -40,32 +49,48 @@ if ($Uninstall) {
 
 # 1. Detection
 if (Test-Path "$installDir\package.json") {
-    Write-Host "Existing installation detected. mode: UPGRADE" -ForegroundColor Yellow
+    Write-Log "Existing installation detected. mode: UPGRADE" "Yellow"
     $isUpdate = $true
 } else {
-    Write-Host "No existing installation found. mode: NEW INSTALL" -ForegroundColor Green
+    Write-Log "No existing installation found. mode: NEW INSTALL" "Green"
     $isUpdate = $false
 }
 
 # 2. Fetch Release Info
-Write-Host "Fetching version information ($Version)..."
+Write-Log "Fetching version information ($Version) from GitHub..."
 try {
+    $releaseUrl = ""
     if ($Version -eq "latest") {
-        $releaseUrl = "https://api.github.com/repos/$repo/releases/latest"
+        # Fetch all releases and pick top one (more reliable than /latest if only Drafts exist)
+        $releaseUrl = "https://api.github.com/repos/$repo/releases"
+        $releases = Invoke-RestMethod -Uri $releaseUrl
+        if ($releases.Count -eq 0) {
+            Write-Error "No releases found in repository $repo. Please wait for the GitHub Action to complete or create a tag."
+            Write-Log "CRITICAL: No releases found." "Red"
+            exit 1
+        }
+        $releaseInfo = $releases[0] # Take the most recent release
     } else {
         $releaseUrl = "https://api.github.com/repos/$repo/releases/tags/$Version"
+        $releaseInfo = Invoke-RestMethod -Uri $releaseUrl
     }
-    $releaseInfo = Invoke-RestMethod -Uri $releaseUrl
-    $assetUrl = ($releaseInfo.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1).browser_download_url
-    Write-Host "Target Version: $($releaseInfo.tag_name)" -ForegroundColor Magenta
+    
+    $asset = $releaseInfo.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+    if (-not $asset) {
+        Write-Error "No ZIP asset found in release $($releaseInfo.tag_name)"
+        exit 1
+    }
+    $assetUrl = $asset.browser_download_url
+    Write-Log "Target Version: $($releaseInfo.tag_name)" "Magenta"
 } catch {
-    Write-Error "Failed to fetch version '$Version'. Check if it exists at https://github.com/$repo/releases"
+    Write-Log "ERROR: Failed to fetch version info. API may be rate limited or repo has no releases." "Red"
+    Write-Error "Failed to fetch version '$Version'. Check if it exists at https://github.com/$repo/releases. Error: $($_.Exception.Message)"
     exit 1
 }
 
 # 3. Backup
 if ($isUpdate) {
-    Write-Host "Creating safety backups..."
+    Write-Log "Creating safety backups..."
     $backupDir = ".backup_$([DateTime]::Now.ToString('yyyyMMddHHmmss'))"
     New-Item -ItemType Directory -Path $backupDir | Out-Null
     if (Test-Path "sake.db") { Copy-Item "sake.db" "$backupDir/sake.db" }
@@ -74,20 +99,21 @@ if ($isUpdate) {
 
 # 4. Download
 $tempFile = "$env:TEMP\sake-$($releaseInfo.tag_name).zip"
-Write-Host "Downloading..."
+Write-Log "Downloading from $assetUrl..."
 Invoke-WebRequest -Uri $assetUrl -OutFile $tempFile
 
 # 5. Extract & Deploy
-Write-Host "Deploying files..."
+Write-Log "Deploying files to $installDir..."
 Expand-Archive -Path $tempFile -DestinationPath $installDir -Force
 Remove-Item $tempFile
 
 # 6. Post-Install Setup
 if (Test-Path $setupScript) {
-    Write-Host "Running lifecycle scripts..."
+    Write-Log "Running lifecycle scripts..."
     powershell -ExecutionPolicy Bypass -File $setupScript
 }
 
-Write-Host "--- Operation Successful ---" -ForegroundColor Green
-if ($isUpdate) { Write-Host "Note: Previous database backup saved in $backupDir" -ForegroundColor Gray }
-Write-Host "Start the dashboard with: npm run dev"
+Write-Log "--- Operation Successful ---" "Green"
+if ($isUpdate) { Write-Log "Note: Previous database backup saved in $backupDir" "Gray" }
+Write-Log "Dashboard is ready."
+Write-Log "Start with: npm run dev"

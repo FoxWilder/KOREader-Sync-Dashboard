@@ -1,13 +1,34 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 import multer from 'multer';
 import Database from 'better-sqlite3';
+
+function logToFile(filename: string, message: string) {
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${message}\n`;
+  fs.appendFileSync(path.join(process.cwd(), filename), logEntry);
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
   const db = new Database('sake.db');
+
+  // service_log.txt for general web requests
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/koreader')) {
+      logToFile('service_log.txt', `${req.method} ${req.path} - ${req.ip}`);
+    }
+    next();
+  });
+
+  // sync_log.txt exclusively for KOReader sync
+  app.use('/koreader', (req, res, next) => {
+    logToFile('sync_log.txt', `${req.method} ${req.path} - ${JSON.stringify(req.body || {})}`);
+    next();
+  });
 
   // Initialize DB tables
   db.exec(`

@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   Clock,
   User,
-  Power
+  Power,
+  Download
 } from 'lucide-react';
 
 interface Book {

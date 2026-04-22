@@ -47,6 +47,14 @@ If you prefer manual setup, follow these steps:
    npm run dev
    ```
 
+## 📊 Logging & Troubleshooting
+
+All activities are logged to the local directory for easy auditing and troubleshooting:
+
+- **`install_log.txt`**: Verbose output from the PowerShell installer/manager.
+- **`service_log.txt`**: General web server requests, authorization events, and library access logs.
+- **`sync_log.txt`**: Detailed logs of every KOReader progress sync event (handshakes, pushes, and pulls).
+
 ## 🤖 Automation
 
 This project uses **GitHub Actions** to automate its lifecycle:
