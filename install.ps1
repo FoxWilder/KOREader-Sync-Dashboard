@@ -149,13 +149,30 @@ Write-Log "Extracting archive..." "Gray"
 Expand-Archive -Path $tempFile -DestinationPath $appDir -Force
 Remove-Item $tempFile
 
-# Handle GitHub's nested folder structure (repo-name-hash)
-$extractedItems = Get-ChildItem -Path $appDir
-if ($extractedItems.Count -eq 1 -and $extractedItems[0].PSIsContainer) {
-    Write-Log "Flattening nested directory structure..." "Gray"
-    $subDir = $extractedItems[0].FullName
-    Get-ChildItem -Path $subDir | Move-Item -Destination $appDir -Force
-    Remove-Item $subDir -Recurse -Force
+# Detect and flatten nested structure (handles GitHub zipballs)
+$packageJson = Get-ChildItem -Path $appDir -Filter "package.json" -Recurse | Select-Object -First 1
+if ($packageJson) {
+    $sourceDir = $packageJson.Directory.FullName
+    if ($sourceDir -ne $appDir) {
+        Write-Log "Flattening nested directory structure from $sourceDir..." "Gray"
+        Get-ChildItem -Path $sourceDir | Move-Item -Destination $appDir -Force
+        # Clean up the now empty (or potentially containing hidden files) source directory
+        Remove-Item $sourceDir -Recurse -Force -ErrorAction SilentlyContinue 
+    }
+}
+
+# Restore staged data
+if (Test-Path $tempDir) {
+    Write-Log "Restoring staged data..." "Gray"
+    if (Test-Path "$tempDir\storage") { 
+        if (!(Test-Path "$appDir\storage")) { New-Item -ItemType Directory "$appDir\storage" -Force | Out-Null }
+        Copy-Item -Recurse "$tempDir\storage\*" "$appDir\storage" -Force 
+    }
+    if (Test-Path "$tempDir\logs") { 
+        if (!(Test-Path "$appDir\logs")) { New-Item -ItemType Directory "$appDir\logs" -Force | Out-Null }
+        Copy-Item -Recurse "$tempDir\logs\*" "$appDir\logs" -Force 
+    }
+    Remove-Item -Recurse $tempDir -ErrorAction SilentlyContinue
 }
 
 # 7. Setup
