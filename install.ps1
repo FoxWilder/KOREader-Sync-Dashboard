@@ -9,26 +9,26 @@ param (
 )
 
 $repo = "FoxWilder/KOReader-Sync-Dashboard"
-$installDir = Get-Location
-$appDir = "$installDir\app"
-$logDir = "$appDir\logs"
+$installDir = $PSScriptRoot
+if (!$installDir) { $installDir = Get-Location }
 
-# Ensure directories exist before logging
-if (!(Test-Path $appDir)) { New-Item -ItemType Directory $appDir -Force | Out-Null }
+$appDir = Join-Path $installDir "app"
+$logDir = Join-Path $appDir "logs"
+
+# CRITICAL: Create log directory BEFORE anything else
 if (!(Test-Path $logDir)) { New-Item -ItemType Directory $logDir -Force | Out-Null }
-
-$logFile = "$logDir\install_log.txt"
+$logFile = Join-Path $logDir "install_log.txt"
 
 # --- LOGGING WRAPPER ---
 function Write-Log([string]$message, [string]$color = "White") {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $fullMessage = "[$timestamp] $message"
     Write-Host $message -ForegroundColor $color
-    if ($logFile) {
-        $parentDir = Split-Path $logFile -Parent
-        if (!(Test-Path $parentDir)) { New-Item -ItemType Directory $parentDir -Force | Out-Null }
-        $fullMessage | Out-File -FilePath $logFile -Append -Encoding utf8
-    }
+    
+    # Final safety check before write
+    $targetDir = Split-Path $logFile -Parent
+    if (!(Test-Path $targetDir)) { New-Item -ItemType Directory $targetDir -Force | Out-Null }
+    $fullMessage | Out-File -FilePath $logFile -Append -Encoding utf8
 }
 
 Write-Log "--- Wilder Sync Dashboard Manager ---" "Cyan"
@@ -113,14 +113,18 @@ $connections = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinu
 if ($connections) {
     foreach ($conn in $connections) {
         if ($conn.OwningProcess) {
-            Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+            $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+            if ($proc) {
+                Write-Log "Stopping process ID $($conn.OwningProcess) ($($proc.Name))..." "Gray"
+                $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 }
 Start-Sleep -Seconds 2
 
 # 4. Download
-$tempFile = "$env:TEMP\wilder-update.zip"
+$tempFile = Join-Path $env:TEMP "wilder-update.zip"
 Write-Log "Downloading version $($releaseInfo.tag_name)..."
 Invoke-WebRequest -Uri $assetUrl -OutFile $tempFile
 
@@ -135,15 +139,15 @@ if ($isUpdate) {
 }
 
 # 6. Deploy
-Write-Log "Deploying core files..."
+Write-Log "Deploying core files..." "Yellow"
 # Clean app folder but KEEP root scripts for now
-if (Test-Path "$installDir\app") { Remove-Item -Recurse -Force "$installDir\app" }
-New-Item -ItemType Directory -Path "$installDir\app" -Force | Out-Null
+if (Test-Path $appDir) { Remove-Item -Recurse -Force $appDir -ErrorAction SilentlyContinue }
+New-Item -ItemType Directory -Path $appDir -Force | Out-Null
 
 # Re-ensure log directory exists immediately after app folder is recreated
-if (!(Test-Path "$appDir\logs")) { New-Item -ItemType Directory "$appDir\logs" -Force | Out-Null }
+if (!(Test-Path $logDir)) { New-Item -ItemType Directory $logDir -Force | Out-Null }
 
-Expand-Archive -Path $tempFile -DestinationPath "$installDir\app" -Force
+Expand-Archive -Path $tempFile -DestinationPath $appDir -Force
 Remove-Item $tempFile
 
 # Restore data
@@ -153,7 +157,7 @@ Remove-Item -Recurse $tempDir
 
 # 7. Setup
 Write-Log "Running infrastructure setup..."
-Set-Location "$installDir\app"
+Set-Location $appDir
 
 # Ensure dependencies are installed
 if (!(Test-Path "node_modules")) {
@@ -171,15 +175,19 @@ Set-Location $installDir
 if (Test-Path "app\run.ps1") { Move-Item "app\run.ps1" "run.ps1" -Force }
 if (Test-Path "app\install.ps1") { Move-Item "app\install.ps1" "install.ps1" -Force }
 
-# Ensure run.ps1 exists and is correct
+# Generate a robust run.ps1
 $runContent = @"
 # Wilder Sync Dashboard Launcher
+Write-Host "--- Wilder Sync Launcher ---" -ForegroundColor Cyan
 Set-Location "`$PSScriptRoot\app"
+
 if (!(Test-Path "node_modules")) {
     Write-Host "Dependencies missing. Orchestrating installation..." -ForegroundColor Yellow
     npm install --omit=dev
 }
-# Execute server using path-safe invocation
+
+# Execute server using path-safe iteration
+Write-Host "Synchronizing with Neural Engine..." -ForegroundColor Gray
 & "node_modules/.bin/tsx" server.ts --prod
 "@
 Set-Content -Path "run.ps1" -Value $runContent
