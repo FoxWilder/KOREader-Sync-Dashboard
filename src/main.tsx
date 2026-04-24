@@ -5,18 +5,28 @@ import './index.css';
 
 // Silence the benign ResizeObserver loop error
 if (typeof window !== 'undefined') {
+  const isResizeObserverError = (msg: string) => {
+    return (
+      msg.includes('ResizeObserver loop completed with undelivered notifications') ||
+      msg.includes('ResizeObserver loop limit exceeded')
+    );
+  };
+
   window.addEventListener('error', (e) => {
-    if (e.message === 'ResizeObserver loop completed with undelivered notifications.') {
-      const resizeObserverErrDiv = document.getElementById('webpack-dev-server-client-overlay-div');
-      const resizeObserverErr = document.getElementById('webpack-dev-server-client-overlay');
-      if (resizeObserverErr) resizeObserverErr.setAttribute('style', 'display: none');
-      if (resizeObserverErrDiv) resizeObserverErrDiv.setAttribute('style', 'display: none');
+    if (isResizeObserverError(e.message)) {
+      // Hide Vite error overlay if it's just this benign error
+      const viteOverlay = document.querySelector('vite-error-overlay');
+      if (viteOverlay) {
+        (viteOverlay as HTMLElement).style.display = 'none';
+      }
+      
+      // Stop the error from being logged to console or showing in overlay
       e.stopImmediatePropagation();
     }
   });
 
   window.addEventListener('unhandledrejection', (e) => {
-    if (e.reason?.message === 'ResizeObserver loop completed with undelivered notifications.') {
+    if (isResizeObserverError(e.reason?.message || '')) {
       e.stopImmediatePropagation();
     }
   });
