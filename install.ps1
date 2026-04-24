@@ -140,24 +140,32 @@ if ($isUpdate) {
 
 # 6. Deploy
 Write-Log "Deploying core files..." "Yellow"
-# Clean app folder but KEEP root scripts for now
 if (Test-Path $appDir) { Remove-Item -Recurse -Force $appDir -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Path $appDir -Force | Out-Null
 
-# Re-ensure log directory exists immediately after app folder is recreated
 if (!(Test-Path $logDir)) { New-Item -ItemType Directory $logDir -Force | Out-Null }
 
+Write-Log "Extracting archive..." "Gray"
 Expand-Archive -Path $tempFile -DestinationPath $appDir -Force
 Remove-Item $tempFile
 
-# Restore data
-if (Test-Path "$tempDir\storage") { Move-Item "$tempDir\storage" "$installDir\app\storage" -Force }
-if (Test-Path "$tempDir\logs") { Move-Item "$tempDir\logs" "$installDir\app\logs" -Force }
-Remove-Item -Recurse $tempDir
+# Handle GitHub's nested folder structure (repo-name-hash)
+$extractedItems = Get-ChildItem -Path $appDir
+if ($extractedItems.Count -eq 1 -and $extractedItems[0].PSIsContainer) {
+    Write-Log "Flattening nested directory structure..." "Gray"
+    $subDir = $extractedItems[0].FullName
+    Get-ChildItem -Path $subDir | Move-Item -Destination $appDir -Force
+    Remove-Item $subDir -Recurse -Force
+}
 
 # 7. Setup
 Write-Log "Running infrastructure setup..."
 Set-Location $appDir
+
+if (!(Test-Path "package.json")) {
+    Write-Log "CRITICAL ERROR: package.json not found after extraction." "Red"
+    exit 1
+}
 
 # Ensure dependencies are installed
 if (!(Test-Path "node_modules")) {
