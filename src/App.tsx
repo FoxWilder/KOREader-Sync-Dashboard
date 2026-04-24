@@ -77,7 +77,7 @@ interface NewsItem {
   };
 }
 
-type Tab = 'library' | 'reading' | 'queue' | 'stats' | 'archived' | 'trash' | 'settings' | 'news';
+type Tab = 'library' | 'reading' | 'queue' | 'stats' | 'settings' | 'news';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('library');
@@ -198,8 +198,6 @@ export default function App() {
     { id: 'queue', label: 'Queue', icon: ListOrdered },
     { id: 'news', label: 'News Feed', icon: Newspaper },
     { id: 'stats', label: 'Stats', icon: BarChart3 },
-    { id: 'archived', label: 'Archived', icon: Archive },
-    { id: 'trash', label: 'Trash', icon: Trash2 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -224,8 +222,9 @@ export default function App() {
         setContainerWidth(width);
         
         // Calculate columns based on actual container width
-        const availableWidth = width - 64; // Adjust for internal padding (p-8 = 2rem * 2)
-        const cols = Math.max(4, Math.floor(availableWidth / 180));
+        // We want AT LEAST 4 columns. We add more if they fit comfortably at 220px each.
+        const availableWidth = width - 64; 
+        const cols = Math.max(4, Math.floor(availableWidth / 220));
         setColumns(cols);
       }
     });
@@ -235,7 +234,7 @@ export default function App() {
   }, []);
 
   const cellWidth = useMemo(() => {
-    const availableWidth = containerWidth - 64; // Adjust for internal padding (p-8 = 2rem * 2)
+    const availableWidth = containerWidth - 64;
     return Math.floor(availableWidth / columns);
   }, [containerWidth, columns]);
 
@@ -529,20 +528,13 @@ export default function App() {
                  <span className="text-[10px] font-black uppercase tracking-[.2em] text-[#34d399]">Indexing Engine</span>
               </motion.div>
             )}
-            <div className="h-10 w-px bg-white/5" />
-            <button 
-              onClick={() => toast.success('Server Interaction Required')}
-              className="bg-white text-black h-12 px-8 rounded-2xl text-[11px] font-black uppercase tracking-[.15em] hover:bg-[#34d399] hover:text-black hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-2xl shadow-white/5"
-            >
-              <Plus size={18} strokeWidth={3} /> Import
-            </button>
           </div>
         </header>
 
         {/* View Transitioning Area */}
         <section className="flex-grow overflow-hidden relative px-10 pb-10">
           <AnimatePresence mode="wait">
-            {['library', 'reading', 'queue', 'archived', 'trash'].includes(activeTab) && (
+            {['library', 'reading', 'queue'].includes(activeTab) && (
               <motion.div 
                 key="books-grid"
                 ref={containerRef}
@@ -578,11 +570,11 @@ export default function App() {
                         const percentage = progress?.percentage || 0;
 
                         return (
-                          <div className="p-2 h-full">
+                          <div className="p-2 h-full flex justify-center">
                             <motion.div 
                               whileHover={{ y: -8 }}
                               onClick={() => setSelectedBook(book)}
-                              className="group flex flex-col gap-2 cursor-pointer h-full"
+                              className="group flex flex-col gap-2 cursor-pointer h-full w-full max-w-[240px]"
                             >
                               <div className="aspect-[2/3] bg-[#0d0d0f] rounded-xl border border-white/5 relative group-hover:border-[#34d399]/40 transition-all shadow-xl overflow-hidden shrink-0">
                                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -937,90 +929,92 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="max-w-4xl space-y-12 pb-20"
+                className="max-w-4xl w-full mx-auto space-y-12 pb-20 h-full overflow-y-auto scrollbar-hide"
               >
-                <div>
-                  <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-orange-400">
-                    <RefreshCw size={20} /> KOReader Sync Configuration
-                  </h2>
-                  <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6 shadow-xl">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-[#71717a] uppercase tracking-widest">Configuration URL</label>
-                      <div className="bg-[#09090b] border border-[#27272a] p-4 rounded-xl flex items-center justify-between group">
-                        <code className="text-sm font-mono text-[#34d399]">{getSyncUrl()}</code>
-                        <button 
-                          onClick={() => {
-                            navigator.clipboard.writeText(getSyncUrl());
-                            alert('Sync URL copied to clipboard');
-                          }}
-                          className="text-[10px] font-bold text-[#71717a] hover:text-white uppercase transition-colors px-2 py-1 bg-[#18181b] rounded border border-white/5"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl space-y-3">
-                        <p className="text-xs text-[#a1a1aa] leading-relaxed">
-                          Enter this <span className="font-bold text-orange-400">Short URL</span> in your KOReader <span className="font-bold">Sync plugin</span> settings. 
-                          By using the shortened route, you bypass the long versioned path while maintaining full compatibility.
-                        </p>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-orange-400/80">
-                           <CheckCircle2 size={12} /> NO SERVER RESTART REQUIRED
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-[#34d399]">
-                    <Library size={20} /> Ebook Library
-                  </h2>
-                  <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6 shadow-xl">
-                    <div className="space-y-4">
+                <div className="space-y-12">
+                  <div>
+                    <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-orange-400">
+                      <RefreshCw size={20} /> KOReader Sync Configuration
+                    </h2>
+                    <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6 shadow-xl text-wrap">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-[#71717a] uppercase">Library Path (Local Windows Path)</label>
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            placeholder="C:\Users\Name\Documents\Books" 
-                            value={libraryPath}
-                            onChange={(e) => setLibraryPath(e.target.value)}
-                            className="bg-[#09090b] border border-[#27272a] p-3 rounded-lg flex-grow text-sm focus:border-[#34d399] outline-none transition-all"
-                          />
+                        <label className="text-xs font-bold text-[#71717a] uppercase tracking-widest">Configuration URL</label>
+                        <div className="bg-[#09090b] border border-[#27272a] p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 group">
+                          <code className="text-sm font-mono text-[#34d399] break-all">{getSyncUrl()}</code>
                           <button 
-                            onClick={saveLibraryPath}
-                            className="bg-white text-black px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#e4e4e7] transition-all"
+                            onClick={() => {
+                              navigator.clipboard.writeText(getSyncUrl());
+                              toast.success('Sync URL copied to clipboard');
+                            }}
+                            className="text-[10px] font-bold text-[#71717a] hover:text-white uppercase transition-colors px-4 py-2 bg-[#18181b] rounded border border-white/5 whitespace-nowrap"
                           >
-                            Save
+                            Copy
                           </button>
                         </div>
-                      </div>
-                      
-                      <div className="pt-4 border-t border-[#27272a]">
-                        <button 
-                          onClick={startScan}
-                          disabled={scanning}
-                          className={`w-full flex items-center justify-center gap-3 bg-[#34d399] text-black py-3 rounded-xl text-sm font-bold hover:bg-[#34d399]/90 transition-all ${scanning ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          <RefreshCw size={18} className={scanning ? 'animate-spin' : ''} />
-                          {scanning ? 'Indexing Library...' : 'Index Library Now'}
-                        </button>
-                        <p className="text-[10px] text-[#71717a] mt-3 text-center">
-                          Scans for EPUB, PDF, MOBI and AZW3 files in the library path and its subfolders.
-                        </p>
+                        <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl space-y-3">
+                          <p className="text-xs text-[#a1a1aa] leading-relaxed">
+                            Enter this <span className="font-bold text-orange-400">Short URL</span> in your KOReader <span className="font-bold">Sync plugin</span> settings. 
+                            By using the shortened route, you bypass the long versioned path while maintaining full compatibility.
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-orange-400/80">
+                             <CheckCircle2 size={12} /> NO SERVER RESTART REQUIRED
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div>
-                   <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-red-500">
-                    <History size={20} /> System Maintenance
-                  </h2>
-                  <div className="flex gap-4">
-                    <button className="flex-grow flex items-center justify-center gap-3 bg-red-500/10 border border-red-500/50 py-4 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/20 transition-all">
-                       <Trash2 size={18} /> Clear Database
-                    </button>
+                  <div>
+                    <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-[#34d399]">
+                      <Library size={20} /> Ebook Library
+                    </h2>
+                    <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6 shadow-xl">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-[#71717a] uppercase">Library Path (Local Windows Path)</label>
+                          <div className="flex flex-col md:flex-row gap-2">
+                            <input 
+                              type="text" 
+                              placeholder="C:\Users\Name\Documents\Books" 
+                              value={libraryPath}
+                              onChange={(e) => setLibraryPath(e.target.value)}
+                              className="bg-[#09090b] border border-[#27272a] p-3 rounded-lg flex-grow text-sm focus:border-[#34d399] outline-none transition-all"
+                            />
+                            <button 
+                              onClick={saveLibraryPath}
+                              className="bg-white text-black px-6 py-2 rounded-lg text-xs font-bold hover:bg-[#e4e4e7] transition-all"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="pt-4 border-t border-[#27272a]">
+                          <button 
+                            onClick={startScan}
+                            disabled={scanning}
+                            className={`w-full flex items-center justify-center gap-3 bg-[#34d399] text-black py-4 rounded-xl text-sm font-bold hover:bg-[#34d399]/90 transition-all ${scanning ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <RefreshCw size={18} className={scanning ? 'animate-spin' : ''} />
+                            {scanning ? 'Indexing Library...' : 'Index Library Now'}
+                          </button>
+                          <p className="text-[10px] text-[#71717a] mt-3 text-center">
+                            Scans for EPUB, PDF, MOBI and AZW3 files in the library path and its subfolders.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                     <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-red-500">
+                      <History size={20} /> System Maintenance
+                    </h2>
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <button className="flex-grow flex items-center justify-center gap-3 bg-red-500/10 border border-red-500/50 py-4 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/20 transition-all">
+                         <Trash2 size={18} /> Clear Database
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
