@@ -46,6 +46,7 @@ if ($LASTEXITCODE -ne 0) { Write-Error "NPM install failed."; exit 1 }
 
 # 4. Build Application
 Write-Host "Building frontend application..."
+if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 npm run build
 if ($LASTEXITCODE -ne 0) { Write-Error "Frontend build failed."; exit 1 }
 

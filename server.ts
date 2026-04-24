@@ -248,19 +248,32 @@ async function startServer() {
   // System Update
   app.get('/api/system/update/check', async (req, res) => {
     try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+      const pkgPath = path.join(process.cwd(), 'package.json');
+      if (!fs.existsSync(pkgPath)) {
+        return res.json({ updateAvailable: false, message: 'Package manifest missing' });
+      }
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
       const currentVersion = pkg.version;
-      const githubRes = await fetch('https://api.github.com/repos/FoxWilder/KOReader-Sync-Dashboard/releases/latest');
+      
+      const githubRes = await fetch('https://api.github.com/repos/FoxWilder/KOReader-Sync-Dashboard/releases/latest', {
+        headers: { 'User-Agent': 'WilderSync-Updater' }
+      });
+      
+      if (!githubRes.ok) throw new Error(`GitHub API returned ${githubRes.status}`);
+      
       const latest = await githubRes.json() as any;
+      const latestTag = latest.tag_name?.replace('v', '') || '0.0.0';
+      const currentVerClean = currentVersion.replace('v', '');
       
       res.json({
         latestVersion: latest.tag_name,
         currentVersion,
-        updateAvailable: latest.tag_name !== currentVersion && !latest.tag_name.includes(currentVersion),
+        updateAvailable: latestTag !== currentVerClean,
         releaseNotes: latest.body || 'No release notes available.'
       });
-    } catch (e) {
-      res.status(500).json({ error: 'update-check-failed' });
+    } catch (e: any) {
+      logToFile('service_log.txt', `Update check failed: ${e.message}`);
+      res.status(500).json({ error: 'update-check-failed', details: e.message });
     }
   });
 
@@ -424,37 +437,65 @@ async function startServer() {
     });
   });
 
-  // KOReader Sync Protocol Endpoints
-  // Handshake
-  app.get('/koreader/sync/v1/auth', (req, res) => {
+  // KOReader Sync Protocol Endpoints (Full compatibility with koreader-sync-server)
+  
+  // Handshake / Auth
+  app.get(['/koreader/sync/v1/auth', '/koreader-sync-v1/auth', '/users/auth'], (req, res) => {
+    logToFile('sync_log.txt', `AUTH Handshake: ${req.headers.authorization ? 'Credentials provided' : 'No credentials'}`);
     res.status(200).send('OK');
   });
 
-  // Post progress
-  app.post('/koreader/sync/v1/progress', (req, res) => {
-    const { document_id, progress, timestamp } = req.body;
-    const userId = '1'; // Hardcoded for demo/setup
+  // Get progress
+  app.get(['/koreader/sync/v1/progress/:documentId', '/koreader-sync-v1/progress/:documentId'], (req, res) => {
+    const { documentId } = req.params;
+    const userId = '1';
+    const data = db.prepare('SELECT progress FROM sync_data WHERE userId = ? AND documentId = ?').get(userId, documentId) as any;
+    
+    if (data) {
+      logToFile('sync_log.txt', `GET Progress for ${documentId}: Data found`);
+      res.json(JSON.parse(data.progress));
+    } else {
+      logToFile('sync_log.txt', `GET Progress for ${documentId}: Not found`);
+      res.status(404).json({ error: 'not found' });
+    }
+  });
+
+  // Update progress (Both PUT and POST for maximum compatibility)
+  const handleProgressUpdate = (req: express.Request, res: express.Response) => {
+    const { documentId } = req.params;
+    const { progress, timestamp, document_id } = req.body;
+    
+    const finalDocId = documentId || document_id;
+    const userId = '1';
+
+    if (!finalDocId) {
+      return res.status(400).json({ error: 'documentId required' });
+    }
+
+    // koreader-sync-server usually sends the progress directly in the body OR as a sub-object
+    // We try to normalize here
+    let normalizedProgress = progress;
+    if (!normalizedProgress && req.body.xpointer) {
+      // It's a direct progress object
+      normalizedProgress = req.body;
+    }
+
     db.prepare(`
       INSERT INTO sync_data (userId, documentId, progress, timestamp) 
       VALUES (?, ?, ?, ?)
       ON CONFLICT(userId, documentId) DO UPDATE SET 
         progress = excluded.progress,
         timestamp = excluded.timestamp
-    `).run(userId, document_id, JSON.stringify(progress), timestamp);
-    res.json({ status: 'ok' });
-  });
+    `).run(userId, finalDocId, JSON.stringify(normalizedProgress), timestamp || Math.floor(Date.now() / 1000));
 
-  // Get progress
-  app.get('/koreader/sync/v1/progress/:documentId', (req, res) => {
-    const { documentId } = req.params;
-    const userId = '1';
-    const data = db.prepare('SELECT progress FROM sync_data WHERE userId = ? AND documentId = ?').get(userId, documentId) as any;
-    if (data) {
-      res.json(JSON.parse(data.progress));
-    } else {
-      res.status(404).json({ error: 'not found' });
-    }
-  });
+    logToFile('sync_log.txt', `UPDATE Progress for ${finalDocId}: Success`);
+    res.json({ status: 'ok' });
+  };
+
+  app.put(['/koreader/sync/v1/progress/:documentId', '/koreader-sync-v1/progress/:documentId'], handleProgressUpdate);
+  app.post(['/koreader/sync/v1/progress', '/koreader-sync-v1/progress'], handleProgressUpdate);
+  app.post(['/koreader/sync/v1/progress/:documentId', '/koreader-sync-v1/progress/:documentId'], handleProgressUpdate);
+
 
   // Vite middleware for development
   if (!isProd) {

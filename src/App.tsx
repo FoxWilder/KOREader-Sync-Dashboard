@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast, Toaster } from 'react-hot-toast';
 import { VList, Virtualizer, experimental_VGrid as VGrid } from 'virtua';
@@ -77,7 +77,7 @@ interface NewsItem {
   };
 }
 
-type Tab = 'library' | 'reading' | 'queue' | 'stats' | 'settings' | 'news';
+type Tab = 'library' | 'reading' | 'queue' | 'stats' | 'archived' | 'trash' | 'settings' | 'news';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('library');
@@ -210,33 +210,29 @@ export default function App() {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [fetchingNews, setFetchingNews] = useState(false);
   const [newRepo, setNewRepo] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const width = entry.contentRect.width;
-        setContainerWidth(width);
+    const updateColumns = () => {
+      window.requestAnimationFrame(() => {
+        const width = window.innerWidth;
+        const sidebarWidth = width >= 768 ? 256 : 80;
+        const availableWidth = width - sidebarWidth - 80;
         
-        // Calculate columns based on actual container width
-        // We want AT LEAST 4 columns. We add more if they fit comfortably at 220px each.
-        const availableWidth = width - 64; 
-        const cols = Math.max(4, Math.floor(availableWidth / 220));
+        // Ensure at least 4 columns on desktop, scaling down min-width if needed
+        // Card size will be between 140px and 240px
+        let cols = Math.floor(availableWidth / 180);
+        if (width >= 1024) {
+          cols = Math.max(4, cols);
+        } else {
+          cols = Math.max(2, cols); // Tablet/Mobile can be fewer
+        }
         setColumns(cols);
-      }
-    });
-
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
+      });
+    };
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
   }, []);
-
-  const cellWidth = useMemo(() => {
-    const availableWidth = containerWidth - 64;
-    return Math.floor(availableWidth / columns);
-  }, [containerWidth, columns]);
 
   const fetchNews = async () => {
     setFetchingNews(true);
@@ -537,7 +533,6 @@ export default function App() {
             {['library', 'reading', 'queue'].includes(activeTab) && (
               <motion.div 
                 key="books-grid"
-                ref={containerRef}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.98 }}
@@ -558,8 +553,8 @@ export default function App() {
                     <VGrid
                       row={Math.max(1, Math.ceil(filteredBooks.length / columns))}
                       col={columns}
-                      cellHeight={320}
-                      cellWidth={cellWidth}
+                      cellHeight={340}
+                      cellWidth={Math.floor((window.innerWidth - (window.innerWidth >= 768 ? 256 : 80) - 80) / columns)}
                       className="h-full p-8 scrollbar-hide"
                     >
                       {({ rowIndex, colIndex }) => {
@@ -570,21 +565,21 @@ export default function App() {
                         const percentage = progress?.percentage || 0;
 
                         return (
-                          <div className="p-2 h-full flex justify-center">
+                          <div className="p-4 h-full">
                             <motion.div 
-                              whileHover={{ y: -8 }}
+                              whileHover={{ y: -8, scale: 1.02 }}
                               onClick={() => setSelectedBook(book)}
-                              className="group flex flex-col gap-2 cursor-pointer h-full w-full max-w-[240px]"
+                              className="group flex flex-col gap-3 cursor-pointer h-full"
                             >
-                              <div className="aspect-[2/3] bg-[#0d0d0f] rounded-xl border border-white/5 relative group-hover:border-[#34d399]/40 transition-all shadow-xl overflow-hidden shrink-0">
+                              <div className="relative aspect-[2/3] w-full max-w-[220px] mx-auto bg-[#0d0d0f] rounded-2xl border border-white/5 group-hover:border-[#34d399]/40 transition-all shadow-2xl overflow-hidden shrink-0">
                                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 
                                 {covers[book.id] ? (
                                   <img src={covers[book.id]} alt={book.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                                 ) : (
-                                  <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center gap-2 bg-gradient-to-br from-[#0d0d0f] to-[#16161a]">
-                                    <BookOpen size={20} className="text-[#34d399]/10" strokeWidth={1.5} />
-                                    <p className="text-[7px] text-[#3f3f46] font-black uppercase tracking-[.2em] leading-normal opacity-50">No Cover</p>
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center gap-3 bg-gradient-to-br from-[#0d0d0f] to-[#16161a]">
+                                    <BookOpen size={24} className="text-[#34d399]/20" strokeWidth={1.5} />
+                                    <p className="text-[8px] text-[#3f3f46] font-black uppercase tracking-[.2em] leading-normal opacity-50">No Data Cover</p>
                                   </div>
                                 )}
                                 
@@ -929,93 +924,142 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="max-w-4xl w-full mx-auto space-y-12 pb-20 h-full overflow-y-auto scrollbar-hide"
+                className="max-w-5xl space-y-12 pb-32 overflow-y-auto max-h-full scrollbar-hide pr-4"
               >
-                <div className="space-y-12">
-                  <div>
-                    <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-orange-400">
-                      <RefreshCw size={20} /> KOReader Sync Configuration
-                    </h2>
-                    <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6 shadow-xl text-wrap">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-[#71717a] uppercase tracking-widest">Configuration URL</label>
-                        <div className="bg-[#09090b] border border-[#27272a] p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 group">
-                          <code className="text-sm font-mono text-[#34d399] break-all">{getSyncUrl()}</code>
-                          <button 
-                            onClick={() => {
-                              navigator.clipboard.writeText(getSyncUrl());
-                              toast.success('Sync URL copied to clipboard');
-                            }}
-                            className="text-[10px] font-bold text-[#71717a] hover:text-white uppercase transition-colors px-4 py-2 bg-[#18181b] rounded border border-white/5 whitespace-nowrap"
-                          >
-                            Copy
-                          </button>
-                        </div>
-                        <div className="p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl space-y-3">
-                          <p className="text-xs text-[#a1a1aa] leading-relaxed">
-                            Enter this <span className="font-bold text-orange-400">Short URL</span> in your KOReader <span className="font-bold">Sync plugin</span> settings. 
-                            By using the shortened route, you bypass the long versioned path while maintaining full compatibility.
-                          </p>
-                          <div className="flex items-center gap-2 text-[10px] font-bold text-orange-400/80">
-                             <CheckCircle2 size={12} /> NO SERVER RESTART REQUIRED
-                          </div>
+                <div>
+                  <h2 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-4 text-[#34d399] italic">
+                    <RefreshCw size={22} strokeWidth={2.5} /> Intelligence Sync Protocol
+                  </h2>
+                  <div className="bg-[#0e0e11] border border-white/5 rounded-[2rem] p-8 space-y-6 shadow-2xl backdrop-blur-3xl">
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.3em]">Master Handshake URL</label>
+                      <div className="bg-black/50 border border-white/5 p-5 rounded-2xl flex items-center justify-between group hover:border-[#34d399]/30 transition-all">
+                        <code className="text-sm font-mono text-[#34d399] tracking-tighter">{getSyncUrl()}</code>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(getSyncUrl());
+                            toast.success('Sync URL extracted to buffer');
+                          }}
+                          className="bg-white/5 hover:bg-[#34d399] hover:text-black border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Extract
+                        </button>
+                      </div>
+                      <div className="p-6 bg-[#34d399]/5 border border-[#34d399]/10 rounded-2xl space-y-4">
+                        <p className="text-xs text-[#a1a1aa] leading-relaxed font-medium">
+                          Deploy this <span className="text-[#34d399] font-black">Encrypted Endpoint</span> within your KOReader configuration. 
+                          The dashboard automatically routes traffic through optimized versioning layers for zero-latency sync.
+                        </p>
+                        <div className="flex items-center gap-3">
+                           <div className="w-1.5 h-1.5 bg-[#34d399] rounded-full shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                           <p className="text-[9px] font-black uppercase tracking-widest text-[#34d399] opacity-80">Sync State: Active_Listening</p>
                         </div>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <div>
-                    <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-[#34d399]">
-                      <Library size={20} /> Ebook Library
-                    </h2>
-                    <div className="bg-[#18181b] border border-[#27272a] rounded-xl p-6 space-y-6 shadow-xl">
+                <div>
+                  <h2 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-4 text-white italic">
+                    <Library size={22} strokeWidth={2.5} /> Data Repository
+                  </h2>
+                  <div className="bg-[#0e0e11] border border-white/5 rounded-[2rem] p-8 space-y-8 shadow-2xl backdrop-blur-3xl">
+                    <div className="space-y-6">
                       <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-[#71717a] uppercase">Library Path (Local Windows Path)</label>
-                          <div className="flex flex-col md:flex-row gap-2">
-                            <input 
-                              type="text" 
-                              placeholder="C:\Users\Name\Documents\Books" 
-                              value={libraryPath}
-                              onChange={(e) => setLibraryPath(e.target.value)}
-                              className="bg-[#09090b] border border-[#27272a] p-3 rounded-lg flex-grow text-sm focus:border-[#34d399] outline-none transition-all"
-                            />
-                            <button 
-                              onClick={saveLibraryPath}
-                              className="bg-white text-black px-6 py-2 rounded-lg text-xs font-bold hover:bg-[#e4e4e7] transition-all"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                        
-                        <div className="pt-4 border-t border-[#27272a]">
+                        <label className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.3em]">Local Intelligence Path</label>
+                        <div className="flex gap-3">
+                          <input 
+                            type="text" 
+                            placeholder="C:\Users\Name\Documents\Books" 
+                            value={libraryPath}
+                            onChange={(e) => setLibraryPath(e.target.value)}
+                            className="bg-black/50 border border-white/5 p-4 rounded-2xl flex-grow text-sm focus:border-[#34d399]/50 outline-none transition-all placeholder:text-[#27272a] font-medium"
+                          />
                           <button 
-                            onClick={startScan}
-                            disabled={scanning}
-                            className={`w-full flex items-center justify-center gap-3 bg-[#34d399] text-black py-4 rounded-xl text-sm font-bold hover:bg-[#34d399]/90 transition-all ${scanning ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={saveLibraryPath}
+                            className="bg-white text-black px-8 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#34d399] transition-all shrink-0"
                           >
-                            <RefreshCw size={18} className={scanning ? 'animate-spin' : ''} />
-                            {scanning ? 'Indexing Library...' : 'Index Library Now'}
+                            Assign Path
                           </button>
-                          <p className="text-[10px] text-[#71717a] mt-3 text-center">
-                            Scans for EPUB, PDF, MOBI and AZW3 files in the library path and its subfolders.
+                        </div>
+                      </div>
+                      
+                      <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center gap-6">
+                        <button 
+                          onClick={startScan}
+                          disabled={scanning}
+                          className="w-full md:w-auto px-10 bg-[#34d399] text-black h-16 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_20px_40px_-10px_rgba(52,211,153,0.3)] flex items-center justify-center gap-4 disabled:opacity-50"
+                        >
+                          <RefreshCw size={18} strokeWidth={3} className={scanning ? 'animate-spin' : ''} />
+                          {scanning ? 'Analyzing Knowledge Base...' : 'Index Repository Now'}
+                        </button>
+                        <div className="flex-grow">
+                          <p className="text-[10px] text-[#52525b] font-bold uppercase tracking-tight leading-relaxed">
+                            Recursive scan initiated for cross-format detection (EPUB, PDF, MOBI, AZW3). 
+                            Metadata extraction prioritized for offline archival.
                           </p>
                         </div>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <div>
-                     <h2 className="text-xl font-bold mb-6 flex items-center gap-3 text-red-500">
-                      <History size={20} /> System Maintenance
-                    </h2>
-                    <div className="flex flex-col md:flex-row gap-4">
-                      <button className="flex-grow flex items-center justify-center gap-3 bg-red-500/10 border border-red-500/50 py-4 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/20 transition-all">
-                         <Trash2 size={18} /> Clear Database
-                      </button>
-                    </div>
+                <div>
+                   <h2 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-4 text-red-500 italic">
+                    <History size={22} strokeWidth={2.5} /> Maintenance & Forensics
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <button className="bg-red-500/5 border border-red-500/20 p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 group hover:bg-red-500/10 transition-all">
+                       <div className="w-14 h-14 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
+                         <Trash2 size={24} />
+                       </div>
+                       <div className="text-center">
+                         <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Sanitize Database</p>
+                         <p className="text-[8px] font-bold text-red-500/40 uppercase tracking-tighter underline decoration-dotted">Irreversible Action</p>
+                       </div>
+                    </button>
+                    
+                    <button 
+                       onClick={checkForUpdates}
+                       className="bg-[#34d399]/5 border border-[#34d399]/20 p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 group hover:bg-[#34d399]/10 transition-all"
+                    >
+                       <div className="w-14 h-14 rounded-2xl bg-[#34d399]/20 flex items-center justify-center text-[#34d399] group-hover:rotate-180 transition-transform duration-700">
+                         <RefreshCw size={24} />
+                       </div>
+                       <div className="text-center">
+                         <p className="text-[10px] font-black text-[#34d399] uppercase tracking-widest mb-1">Verify Updates</p>
+                         <p className="text-[8px] font-bold text-[#34d399]/40 uppercase tracking-tighter">Query Remote Server</p>
+                       </div>
+                    </button>
                   </div>
+                  
+                  {updateInfo && updateInfo.updateAvailable && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-8 p-8 bg-blue-500/10 border border-blue-500/20 rounded-[2.5rem] flex flex-col md:flex-row items-center gap-8"
+                    >
+                      <div className="w-20 h-20 shrink-0 bg-blue-500 rounded-3xl flex items-center justify-center shadow-[0_0_50px_rgba(59,130,246,0.3)] animate-pulse">
+                         <Zap size={36} className="text-white" />
+                      </div>
+                      <div className="flex-grow">
+                        <div className="flex items-center gap-4 mb-2">
+                           <h3 className="text-xl font-black text-white uppercase tracking-tighter">Patch v{updateInfo.latestVersion} Available</h3>
+                           <span className="px-3 py-1 bg-blue-500 text-white text-[10px] font-black rounded-full uppercase">Priority</span>
+                        </div>
+                        <p className="text-xs text-[#a1a1aa] font-medium leading-relaxed max-w-xl">
+                          An improved system core has been detected on the remote terminal. Upgrade recommended to maintain peak performance and sync integrity.
+                        </p>
+                      </div>
+                      <button 
+                        onClick={applyUpdate}
+                        disabled={updating}
+                        className="w-full md:w-auto px-10 h-16 bg-blue-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_20px_40px_-10px_rgba(59,130,246,0.3)] disabled:opacity-50"
+                      >
+                        {updating ? 'Updating...' : 'Deploy Upgrade'}
+                      </button>
+                    </motion.div>
+                  )}
                 </div>
               </motion.div>
             )}
