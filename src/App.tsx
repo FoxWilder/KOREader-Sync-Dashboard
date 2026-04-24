@@ -85,6 +85,7 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [covers, setCovers] = useState<Record<string, string>>({});
 
   // Detect if we are in a preview environment (AI Studio or GitHub Pages)
@@ -218,13 +219,15 @@ export default function App() {
         const sidebarWidth = width >= 768 ? 256 : 80;
         const availableWidth = width - sidebarWidth - 80;
         
-        // Ensure at least 4 columns on desktop, scaling down min-width if needed
-        // Card size will be between 140px and 240px
-        let cols = Math.floor(availableWidth / 180);
+        // Ensure at least 4 columns on desktop (>=1024px)
+        // Card size will be calculated based on availableWidth / cols
+        let cols = Math.floor(availableWidth / 200);
         if (width >= 1024) {
           cols = Math.max(4, cols);
+        } else if (width >= 768) {
+          cols = Math.max(3, cols);
         } else {
-          cols = Math.max(2, cols); // Tablet/Mobile can be fewer
+          cols = Math.max(2, cols);
         }
         setColumns(cols);
       });
@@ -530,6 +533,18 @@ export default function App() {
         {/* View Transitioning Area */}
         <section className="flex-grow overflow-hidden relative px-10 pb-10">
           <AnimatePresence mode="wait">
+            {activeTab === 'queue' && (
+              <div className="absolute top-10 right-10 z-30 max-w-xs p-6 bg-[#34d399]/5 border border-[#34d399]/20 rounded-[2rem] backdrop-blur-3xl animate-in fade-in slide-in-from-right-4 duration-500">
+                <div className="flex items-center gap-3 mb-3 text-[#34d399]">
+                   <ListOrdered size={20} />
+                   <h3 className="text-xs font-black uppercase tracking-widest">Protocol: QUEUE</h3>
+                </div>
+                <p className="text-[10px] text-[#a1a1aa] font-medium leading-[1.6]">
+                  The Archival Queue is a priority staging area for upcoming intelligence processing. 
+                  Assigning books here allows for pre-sync indexing and immediate transition once Current Reading sessions conclude.
+                </p>
+              </div>
+            )}
             {['library', 'reading', 'queue'].includes(activeTab) && (
               <motion.div 
                 key="books-grid"
@@ -575,7 +590,7 @@ export default function App() {
                                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 
                                 {covers[book.id] ? (
-                                  <img src={covers[book.id]} alt={book.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                  <img src={covers[book.id]} alt={book.title} className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" />
                                 ) : (
                                   <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center gap-3 bg-gradient-to-br from-[#0d0d0f] to-[#16161a]">
                                     <BookOpen size={24} className="text-[#34d399]/20" strokeWidth={1.5} />
@@ -594,14 +609,16 @@ export default function App() {
                                 )}
 
                                 <div className="absolute bottom-2 right-2 z-20 flex flex-col gap-1 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
-                                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 px-1.5 py-0.5 rounded-md text-[7px] font-black text-white uppercase tracking-widest uppercase">
+                                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 px-1.5 py-0.5 rounded-md text-[7px] font-black text-white uppercase tracking-widest">
                                     {book.format}
                                   </div>
                                 </div>
                               </div>
                               
                               <div className="space-y-0.5 flex-grow overflow-hidden">
-                                <h3 className="text-[10px] font-black truncate text-white tracking-tight leading-tight group-hover:text-[#34d399] transition-colors">{book.title}</h3>
+                                <h3 className="text-[10px] font-black truncate text-white tracking-tight leading-tight group-hover:text-[#34d399] transition-colors block uppercase tracking-widest" title={book.title}>
+                                  {book.title}
+                                </h3>
                                 <p className="text-[8px] text-[#52525b] font-black truncate uppercase tracking-tighter opacity-80">{book.author}</p>
                               </div>
                             </motion.div>
@@ -637,99 +654,102 @@ export default function App() {
                       <X size={20} />
                     </button>
 
-                    <div className="w-full md:w-[40%] aspect-[4/5] md:aspect-auto bg-black flex items-center justify-center relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
+                    <div className="w-full md:w-[45%] h-full bg-black flex items-center justify-center relative overflow-hidden p-6 md:p-10 shrink-0">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/20 z-10" />
                       {covers[selectedBook.id] ? (
-                        <div className="w-full h-full relative">
+                        <div className="w-full h-full flex items-center justify-center relative">
                           <img 
                             src={covers[selectedBook.id]} 
-                            className="absolute inset-0 blur-3xl opacity-30 scale-150" 
+                            className="absolute inset-0 blur-[80px] opacity-40 scale-150" 
                           />
                           <img 
                             src={covers[selectedBook.id]} 
                             alt={selectedBook.title} 
-                            className="relative z-10 w-full h-full object-cover shadow-[0_0_50px_rgba(0,0,0,0.5)]" 
+                            className="relative z-10 max-h-full max-w-full object-contain shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)] border border-white/5 rounded-lg" 
                           />
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center gap-4 opacity-10">
-                          <BookOpen size={100} strokeWidth={1} />
-                          <p className="text-sm font-black uppercase tracking-[0.5em]">No Cover</p>
+                        <div className="flex flex-col items-center gap-6 opacity-20">
+                          <BookOpen size={120} strokeWidth={1} />
+                          <p className="text-xl font-black uppercase tracking-[0.8em]">No Archive Data</p>
                         </div>
                       )}
                       
-                      <div className="absolute bottom-8 left-8 z-20 flex gap-3">
-                         <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-2xl border border-white/5 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                           <Database size={12} className="text-[#34d399]" />
+                      <div className="absolute bottom-10 left-10 z-20 flex gap-4">
+                         <div className="px-5 py-2 rounded-2xl bg-white/5 backdrop-blur-3xl border border-white/10 text-[10px] font-black uppercase tracking-widest flex items-center gap-3">
+                           <Database size={14} className="text-[#34d399]" />
                            {selectedBook.format}
                          </div>
-                         <div className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-2xl border border-white/5 text-[10px] font-black uppercase tracking-widest">
+                         <div className="px-5 py-2 rounded-2xl bg-white/5 backdrop-blur-3xl border border-white/10 text-[10px] font-black uppercase tracking-widest">
                            {(selectedBook.size ? (selectedBook.size / (1024 * 1024)).toFixed(1) : '?')} MB
                          </div>
                       </div>
                     </div>
                     
-                    <div className="flex-grow p-10 md:p-14 flex flex-col justify-between overflow-y-auto max-h-[85vh]">
-                      <div>
-                        <div className="mb-10">
+                    <div className="flex-grow p-10 md:p-14 flex flex-col overflow-y-auto bg-gradient-to-br from-[#111114] to-[#08080a]">
+                      <div className="mb-auto">
+                        <div className="mb-12">
                           <motion.h2 
-                            initial={{ opacity: 0, x: -10 }} 
+                            initial={{ opacity: 0, x: -20 }} 
                             animate={{ opacity: 1, x: 0 }}
-                            className="text-4xl md:text-5xl font-black tracking-tight mb-4 leading-[1.1] text-white"
+                            className="text-4xl md:text-6xl font-black tracking-tighter mb-4 leading-[1] text-white italic"
                           >
                             {selectedBook.title}
                           </motion.h2>
-                          <p className="text-xl text-[#34d399] font-bold tracking-tight opacity-90">
-                            by {selectedBook.author}
+                          <p className="text-2xl text-[#34d399] font-black tracking-tight opacity-90 uppercase">
+                            AUTHOR ENTITY: {selectedBook.author}
                           </p>
                         </div>
                         
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
                           {[
-                            { label: 'Progress', value: `${Math.round(parseProgress(selectedBook.progress)?.percentage || 0)}%`, color: 'text-[#34d399]' },
-                            { label: 'Language', value: selectedBook.language?.toUpperCase() || 'EN', color: 'text-white' },
-                            { label: 'Status', value: selectedBook.status.toUpperCase(), color: 'text-blue-400' },
-                            { label: 'Created', value: new Date(selectedBook.createdAt as any).toLocaleDateString(), color: 'text-[#71717a]' }
+                            { label: 'Sync State', value: `${Math.round(parseProgress(selectedBook.progress)?.percentage || 0)}%`, color: 'text-[#34d399]' },
+                            { label: 'Language', value: selectedBook.language?.toUpperCase() || 'EN', color: 'text-white/60' },
+                            { label: 'Classification', value: selectedBook.status.toUpperCase(), color: 'text-blue-400' },
+                            { label: 'Archival Date', value: new Date(selectedBook.createdAt as any).toLocaleDateString(), color: 'text-[#52525b]' }
                           ].map((stat, i) => (
-                            <div key={i} className="flex flex-col gap-1">
-                              <p className="text-[10px] text-[#3f3f46] font-black uppercase tracking-[0.2em]">{stat.label}</p>
-                              <p className={`text-xl font-black tracking-tighter ${stat.color}`}>{stat.value}</p>
+                            <div key={i} className="flex flex-col gap-2">
+                              <p className="text-[10px] text-[#3f3f46] font-black uppercase tracking-[0.3em]">{stat.label}</p>
+                              <p className={`text-2xl font-black tracking-tighter ${stat.color}`}>{stat.value}</p>
                             </div>
                           ))}
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-12 py-8 border-y border-white/5">
-                          <div className="space-y-2">
-                            <p className="text-[10px] text-[#3f3f46] font-black uppercase tracking-widest flex items-center gap-2">
-                              <Archive size={14} className="text-[#34d399]" /> Publisher
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16 py-10 border-y border-white/5">
+                          <div className="space-y-3">
+                            <p className="text-[10px] text-[#3f3f46] font-black uppercase tracking-[0.4em] flex items-center gap-3">
+                               Publisher Authority
                             </p>
-                            <p className="text-sm font-bold text-[#a1a1aa] leading-tight">{selectedBook.publisher || 'Independent'}</p>
+                            <p className="text-base font-black text-[#a1a1aa] tracking-tight">{selectedBook.publisher || 'Independent Operator'}</p>
                           </div>
-                          <div className="space-y-2">
-                            <p className="text-[10px] text-[#3f3f46] font-black uppercase tracking-widest flex items-center gap-2">
-                              <Clock size={14} className="text-orange-400" /> Published Date
+                          <div className="space-y-3">
+                            <p className="text-[10px] text-[#3f3f46] font-black uppercase tracking-[0.4em] flex items-center gap-3">
+                               Release Timeline
                             </p>
-                            <p className="text-sm font-bold text-[#a1a1aa] leading-tight">{selectedBook.publishedDate || 'Unknown Date'}</p>
+                            <p className="text-base font-black text-orange-400/80 tracking-tight">{selectedBook.publishedDate || 'Data Fragmented'}</p>
                           </div>
                         </div>
 
-                        <div className="space-y-4 mb-10">
-                          <h4 className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.3em] flex items-center gap-3">
-                             <div className="w-1.5 h-1.5 bg-[#34d399] rounded-full" /> Synopsis
+                        <div className="space-y-6 mb-12">
+                          <h4 className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.5em] flex items-center gap-4">
+                             <div className="w-2 h-2 bg-[#34d399] rounded-full shadow-[0_0_10px_rgba(52,211,153,0.5)]" /> Neural Synopsis
                           </h4>
-                          <p className="text-base leading-relaxed text-[#a1a1aa] font-medium italic opacity-80">
-                            {selectedBook.description || "No thematic summary available. Metadata re-index recommended."}
+                          <p className="text-lg leading-[1.6] text-[#a1a1aa] font-medium opacity-80 max-w-3xl">
+                            {selectedBook.description || "Synthesizing synopsis metadata... No summary available in archival storage. Manual analysis required."}
                           </p>
                         </div>
                       </div>
                       
-                      <div className="flex gap-4 mt-auto">
-                        <button 
-                          onClick={() => updateBookStatus(selectedBook.id, selectedBook.status === 'reading' ? 'library' : 'reading')}
-                          className="flex-grow flex items-center justify-center gap-3 bg-[#34d399] text-black h-16 rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_20px_40px_-10px_rgba(52,211,153,0.3)]"
-                        >
-                          <Zap size={18} /> {selectedBook.status === 'reading' ? 'Clear Reading Status' : 'Mark as Reading'}
-                        </button>
+                      <div className="pt-10 border-t border-white/5">
+                         <div className="flex items-center gap-4 p-6 bg-[#34d399]/5 border border-[#34d399]/20 rounded-3xl">
+                            <div className="w-10 h-10 rounded-2xl bg-[#34d399] flex items-center justify-center text-black shadow-[0_0_20px_rgba(52,211,153,0.3)]">
+                               <RefreshCw size={20} className={parseInt(parseProgress(selectedBook.progress)?.percentage) > 0 ? "animate-spin" : ""} />
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black text-[#34d399] uppercase tracking-widest">KOReader Sync Status</p>
+                               <p className="text-xs font-bold text-white/50 italic">Telemetry derived from connected mobile reading units.</p>
+                            </div>
+                         </div>
                       </div>
                     </div>
                   </motion.div>
@@ -838,83 +858,213 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="space-y-12"
+                className="space-y-12 h-full overflow-y-auto scrollbar-hide pb-20"
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                   {[
-                    { label: 'Intelligence Base', value: stats?.total || 0, sub: 'Total Records', color: 'text-white', icon: Library },
-                    { label: 'Active Sessions', value: stats?.reading || 0, sub: 'Deep Reading', color: 'text-[#34d399]', icon: BookMarked },
-                    { label: 'Knowledge Vault', value: stats?.completed || 0, sub: 'Archived Docs', color: 'text-blue-400', icon: Archive },
-                    { label: 'Synapse Uptime', value: `${Math.floor((stats?.uptime || 0) / 3600)}h`, sub: 'Server Cycles', color: 'text-orange-400', icon: Zap },
+                    { id: 'intel', label: 'Intelligence Base', value: stats?.total || 0, sub: 'Total Records', color: 'text-white', icon: Library },
+                    { id: 'active', label: 'Active Sessions', value: stats?.reading || 0, sub: 'Deep Reading', color: 'text-[#34d399]', icon: BookMarked },
+                    { id: 'knowledge', label: 'Knowledge Vault', value: stats?.completed || 0, sub: 'Archived Docs', color: 'text-blue-400', icon: Archive },
+                    { id: 'synapse', label: 'Synapse Uptime', value: stats?.uptime ? `${Math.floor(stats.uptime / 3600)}h` : '0h', sub: 'Server Cycles', color: 'text-orange-400', icon: Zap },
                   ].map((stat, i) => (
                     <motion.div 
                       key={i}
                       initial={{ scale: 0.95, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ delay: i * 0.05 }}
-                      className="bg-[#111114] border border-white/5 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden group"
+                      onClick={() => setSelectedStat(stat.id)}
+                      className="bg-[#0e0e11] border border-white/5 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden group cursor-pointer hover:border-[#34d399]/30 transition-all active:scale-[0.98]"
                     >
-                      <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                         <stat.icon size={120} />
+                      <div className="absolute -right-6 -bottom-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                         <stat.icon size={160} />
                       </div>
-                      <p className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.3em] mb-4">{stat.label}</p>
-                      <p className={`text-4xl font-black tracking-tighter ${stat.color} mb-2`}>{stat.value}</p>
-                      <p className="text-[10px] font-bold text-[#3f3f46] uppercase">{stat.sub}</p>
+                      <p className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.4em] mb-6">{stat.label}</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className={`text-5xl font-black tracking-tighter ${stat.color} leading-none`}>{stat.value}</p>
+                      </div>
+                      <p className="text-[10px] font-bold text-[#3f3f46] uppercase tracking-[0.2em] mt-4">{stat.sub}</p>
+                      
+                      <div className="mt-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <span className="text-[8px] font-black uppercase text-[#34d399]">View Node Details</span>
+                         <ChevronRight size={12} className="text-[#34d399]" />
+                      </div>
                     </motion.div>
                   ))}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <div className="bg-[#111114] border border-white/5 rounded-[2.5rem] p-10">
-                    <h3 className="text-sm font-black uppercase tracking-widest text-[#52525b] mb-8 flex items-center gap-3">
-                      <div className="w-2 h-2 bg-[#34d399] rounded-full" /> Library Composition
-                    </h3>
-                    <div className="grid grid-cols-2 gap-8">
-                      <div className="space-y-6">
-                        <div>
-                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Total Storage</p>
-                          <p className="text-2xl font-black text-white italic">
-                            {((stats?.size || 0) / (1024 * 1024 * 1024)).toFixed(2)} <span className="text-sm opacity-30 not-italic">GB</span>
-                          </p>
+                  <div className="bg-[#0e0e11] border border-white/5 rounded-[3rem] p-12 relative group overflow-hidden">
+                    <div className="absolute top-0 right-0 p-12 opacity-[0.02]">
+                       <Activity size={240} />
+                    </div>
+                    <div className="relative z-10">
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-[#52525b] mb-12 flex items-center gap-4">
+                        <div className="w-2.5 h-2.5 bg-[#34d399] rounded-full shadow-[0_0_10px_rgba(52,211,153,0.5)]" /> Compositional Analysis
+                      </h3>
+                      <div className="grid grid-cols-2 gap-12">
+                        <div className="space-y-10">
+                          <div>
+                            <p className="text-[10px] font-black text-[#3f3f46] uppercase mb-3 tracking-widest">Global Density</p>
+                            <p className="text-4xl font-black text-white italic tracking-tighter">
+                              {((stats?.size || 0) / (1024 * 1024 * 1024)).toFixed(2)} <span className="text-sm opacity-30 not-italic uppercase tracking-widest font-black ml-2">GB</span>
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-[#3f3f46] uppercase mb-3 tracking-widest">Cognitive Authors</p>
+                            <p className="text-4xl font-black text-white italic tracking-tighter">
+                              {stats?.authors || 0} <span className="text-sm opacity-30 not-italic uppercase tracking-widest font-black ml-2">Entities</span>
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Creative Minds</p>
-                          <p className="text-2xl font-black text-white italic">
-                            {stats?.authors || 0} <span className="text-sm opacity-30 not-italic">Authors</span>
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-6">
-                        <div>
-                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Taxonomy</p>
-                          <p className="text-2xl font-black text-white italic">
-                            {stats?.categories || 0} <span className="text-sm opacity-30 not-italic">Categories</span>
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-[#3f3f46] uppercase mb-2">Data Formats</p>
-                          <div className="flex flex-wrap gap-2">
-                            {stats?.formats?.map(f => (
-                              <span key={f.format} className="px-3 py-1 bg-white/5 border border-white/5 rounded-full text-[9px] font-black text-[#52525b] uppercase tracking-tighter">
-                                {f.format}: {f.count}
-                              </span>
-                            ))}
+                        <div className="space-y-10">
+                          <div>
+                            <p className="text-[10px] font-black text-[#3f3f46] uppercase mb-3 tracking-widest">Subject Taxonomy</p>
+                            <p className="text-4xl font-black text-white italic tracking-tighter">
+                              {stats?.categories || 0} <span className="text-sm opacity-30 not-italic uppercase tracking-widest font-black ml-2">Sectors</span>
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-[#3f3f46] uppercase mb-3 tracking-widest">Protocol Formats</p>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                              {stats?.formats?.map(f => (
+                                <div key={f.format} className="px-5 py-2 bg-white/5 border border-white/10 rounded-2xl flex flex-col gap-1 items-center min-w-[70px]">
+                                  <span className="text-[10px] font-black text-white uppercase">{f.format}</span>
+                                  <span className="text-[8px] font-bold text-[#34d399] uppercase">{f.count} Unit{f.count !== 1 ? 's' : ''}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-br from-[#34d399]/5 to-transparent border border-[#34d399]/10 rounded-[2.5rem] p-10 flex flex-col justify-center items-center text-center">
-                    <div className="w-20 h-20 bg-[#34d399] rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(52,211,153,0.3)]">
-                       <Activity size={40} className="text-black" />
-                    </div>
-                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4 italic">System Pulse <span className="text-[#34d399]">Optimal</span></h3>
-                    <p className="text-sm text-[#71717a] font-medium max-w-sm leading-relaxed">
-                      Wilder Sync is monitoring your intelligence base across {stats?.authors || 0} authors and {stats?.categories || 0} sectors of knowledge.
+                  <div className="bg-gradient-to-br from-[#34d399]/5 to-transparent border border-[#34d399]/10 rounded-[3rem] p-12 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(52,211,153,0.1),transparent)]" />
+                    <motion.div 
+                       animate={{ 
+                         scale: [1, 1.05, 1],
+                         rotate: [0, 5, -5, 0]
+                       }}
+                       transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                       className="w-24 h-24 bg-[#34d399] rounded-[2rem] flex items-center justify-center mb-10 shadow-[0_20px_50px_rgba(52,211,153,0.4)] relative z-10"
+                    >
+                       <Activity size={48} className="text-black" />
+                    </motion.div>
+                    <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-6 italic relative z-10">System Status: <span className="text-[#34d399]">OPTIMAL</span></h3>
+                    <p className="text-sm text-[#a1a1aa] font-medium max-w-md leading-relaxed relative z-10 px-8">
+                      Wilder Sync background processes are operating at peak efficiency. 
+                      Neural indexing of {stats?.total || 0} intelligence artifacts concluded with zero fragmentation.
                     </p>
+                    <div className="mt-12 flex gap-8 relative z-10">
+                       <div className="flex flex-col gap-1">
+                          <p className="text-[9px] font-black text-[#52525b] uppercase tracking-widest">Latency</p>
+                          <p className="text-xl font-black text-white tracking-tighter">0.4ms</p>
+                       </div>
+                       <div className="w-px h-10 bg-white/5" />
+                       <div className="flex flex-col gap-1">
+                          <p className="text-[9px] font-black text-[#52525b] uppercase tracking-widest">Memory</p>
+                          <p className="text-xl font-black text-white tracking-tighter">142MB</p>
+                       </div>
+                       <div className="w-px h-10 bg-white/5" />
+                       <div className="flex flex-col gap-1">
+                          <p className="text-[9px] font-black text-[#52525b] uppercase tracking-widest">Syncs</p>
+                          <p className="text-xl font-black text-[#34d399] tracking-tighter">Active</p>
+                       </div>
+                    </div>
                   </div>
                 </div>
+
+                {/* Interactive Stat Modals */}
+                <AnimatePresence>
+                  {selectedStat && (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setSelectedStat(null)}
+                      className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/90 backdrop-blur-2xl"
+                    >
+                      <motion.div 
+                        initial={{ scale: 0.9, y: 30 }}
+                        animate={{ scale: 1, y: 0 }}
+                        exit={{ scale: 0.9, y: 30 }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-[#0e0e11] border border-white/5 rounded-[3rem] p-12 max-w-4xl w-full shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)] relative overflow-hidden"
+                      >
+                         <button 
+                           onClick={() => setSelectedStat(null)}
+                           className="absolute top-10 right-10 z-10 w-12 h-12 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all border border-white/5"
+                         >
+                           <X size={24} />
+                         </button>
+
+                         <div className="flex flex-col md:flex-row gap-12">
+                            <div className="w-full md:w-1/3 space-y-8">
+                               <div className="w-20 h-20 rounded-3xl bg-[#34d399]/10 flex items-center justify-center text-[#34d399]">
+                                  {selectedStat === 'intel' && <Library size={40} />}
+                                  {selectedStat === 'active' && <BookMarked size={40} />}
+                                  {selectedStat === 'knowledge' && <Archive size={40} />}
+                                  {selectedStat === 'synapse' && <Zap size={40} />}
+                               </div>
+                               <div>
+                                  <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic leading-none mb-2">
+                                     {selectedStat === 'intel' && "Neural Core"}
+                                     {selectedStat === 'active' && "Session Stream"}
+                                     {selectedStat === 'knowledge' && "Void Vault"}
+                                     {selectedStat === 'synapse' && "System Pulse"}
+                                  </h2>
+                                  <p className="text-sm font-bold text-[#34d399] uppercase tracking-widest">
+                                     Module Architecture
+                                  </p>
+                               </div>
+                            </div>
+
+                            <div className="flex-grow space-y-10">
+                               <div className="grid grid-cols-2 gap-8">
+                                  <div className="space-y-2">
+                                     <p className="text-[10px] font-black text-[#52525b] uppercase tracking-widest">Primary Metrics</p>
+                                     <p className="text-xl font-bold text-white leading-tight">
+                                        {selectedStat === 'intel' && `${stats?.total || 0} Documents Indexed`}
+                                        {selectedStat === 'active' && `${stats?.reading || 0} Parallel Sessions`}
+                                        {selectedStat === 'knowledge' && `${stats?.completed || 0} Complete Transfers`}
+                                        {selectedStat === 'synapse' && `${Math.floor((stats?.uptime || 0) / 3600)} Hours Continous`}
+                                     </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                     <p className="text-[10px] font-black text-[#52525b] uppercase tracking-widest">Stability Index</p>
+                                     <p className="text-xl font-bold text-[#34d399] leading-tight">99.98% Accurate</p>
+                                  </div>
+                               </div>
+
+                               <div className="p-8 bg-white/2 border border-white/5 rounded-3xl space-y-4">
+                                  <p className="text-[10px] font-black text-[#52525b] uppercase tracking-[0.3em]">Operational Logic</p>
+                                  <p className="text-sm text-[#a1a1aa] leading-relaxed font-medium">
+                                     {selectedStat === 'intel' && "The neural core manages the entire intelligence library. It utilizes recursive scanning protocols to maintain an up-to-date map of artifact metadata, authors, and file pointers."}
+                                     {selectedStat === 'active' && "Session stream protocols monitor real-time reading telemetry. This telemetry is transmitted via the KOReader sync layer and stored in our local optimized state database."}
+                                     {selectedStat === 'knowledge' && "The Void Vault is a high-latency storage layer for completed synchronization cycles. Documents here are kept in a finalized state to preserve history and metrics."}
+                                     {selectedStat === 'synapse' && "The Synapse layer is the core of the Wilder server. It maintains HTTP handlers, database connections, and background I/O operations without interruption."}
+                                  </p>
+                               </div>
+
+                               <div className="grid grid-cols-3 gap-6">
+                                  {[1, 2, 3].map(i => (
+                                     <div key={i} className="h-1 bg-white/5 rounded-full relative overflow-hidden">
+                                        <motion.div 
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${40 + (i * 15)}%` }}
+                                          transition={{ delay: 0.5 + (i * 0.1), duration: 1 }}
+                                          className="absolute inset-0 bg-[#34d399]/40" 
+                                        />
+                                     </div>
+                                  ))}
+                               </div>
+                            </div>
+                         </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
 

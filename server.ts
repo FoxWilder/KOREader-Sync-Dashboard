@@ -18,9 +18,15 @@ function logToFile(filename: string, message: string) {
 }
 
 async function startServer() {
-  // Ensure log files exist for tailing
+  // Ensure directories exist
+  ['logs', 'storage', 'data/covers'].forEach(d => {
+    const p = path.join(process.cwd(), d);
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+  });
+
+  // Ensure log files exist
   ['service_log.txt', 'sync_log.txt'].forEach(f => {
-    const p = path.join(process.cwd(), f);
+    const p = path.join(process.cwd(), 'logs', f);
     if (!fs.existsSync(p)) fs.writeFileSync(p, '');
   });
 
@@ -31,44 +37,45 @@ async function startServer() {
   const rawEnv = (process.env.NODE_ENV || 'development').trim().toLowerCase();
   const isProd = isProdFlag || rawEnv === 'production';
 
-  logToFile('service_log.txt', `--- Wilder Server Starting (Mode: ${isProd ? 'PRODUCTION' : 'DEVELOPMENT'}) ---`);
-  if (!isProd) logToFile('service_log.txt', `Note: Raw NODE_ENV was "${process.env.NODE_ENV}", isProdFlag was ${isProdFlag}`);
+  logToFile('logs/service_log.txt', `--- Wilder Server Starting (Mode: ${isProd ? 'PRODUCTION' : 'DEVELOPMENT'}) ---`);
+  if (!isProd) logToFile('logs/service_log.txt', `Note: Raw NODE_ENV was "${process.env.NODE_ENV}", isProdFlag was ${isProdFlag}`);
 
   // Start listening IMMEDIATELY to prevent parent process hangs and confirm port ownership
   const server = app.listen(PORT, '0.0.0.0', () => {
-    logToFile('service_log.txt', `Server successfully listening on http://0.0.0.0:${PORT}`);
+    logToFile('logs/service_log.txt', `Server successfully listening on http://0.0.0.0:${PORT}`);
     console.log(`Server running on http://localhost:${PORT}`);
   });
 
   server.on('error', (err: any) => {
-    logToFile('service_log.txt', `SERVER LISTENER ERROR: ${err.message}`);
+    logToFile('logs/service_log.txt', `SERVER LISTENER ERROR: ${err.message}`);
     if (err.code === 'EADDRINUSE') {
-      logToFile('service_log.txt', `Port ${PORT} is already in use by another process.`);
+      logToFile('logs/service_log.txt', `Port ${PORT} is already in use by another process.`);
     }
     console.error('Server error:', err);
   });
 
   try {
-    logToFile('service_log.txt', `Initializing database at ${path.join(process.cwd(), 'wilder.db')}...`);
-    const db = new Database('wilder.db', { verbose: (msg) => logToFile('service_log.txt', `DB: ${msg}`) });
-    logToFile('service_log.txt', 'Database connection established.');
+    const dbPath = path.join(process.cwd(), 'storage', 'wilder.db');
+    logToFile('logs/service_log.txt', `Initializing database at ${dbPath}...`);
+    const db = new Database(dbPath, { verbose: (msg) => logToFile('logs/service_log.txt', `DB: ${msg}`) });
+    logToFile('logs/service_log.txt', 'Database connection established.');
 
-    // service_log.txt for general web requests
+    // logs/service_log.txt for general web requests
     app.use((req, res, next) => {
       if (!req.path.startsWith('/koreader')) {
-        logToFile('service_log.txt', `${req.method} ${req.path} - ${req.ip}`);
+        logToFile('logs/service_log.txt', `${req.method} ${req.path} - ${req.ip}`);
       }
       next();
     });
 
-    // sync_log.txt exclusively for KOReader sync
+    // logs/sync_log.txt exclusively for KOReader sync
     app.use('/koreader', (req, res, next) => {
-      logToFile('sync_log.txt', `${req.method} ${req.path} - ${JSON.stringify(req.body || {})}`);
+      logToFile('logs/sync_log.txt', `${req.method} ${req.path} - ${JSON.stringify(req.body || {})}`);
       next();
     });
 
     // Initialize DB tables
-    logToFile('service_log.txt', 'Initializing database tables...');
+    logToFile('logs/service_log.txt', 'Initializing database tables...');
     db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -101,7 +108,7 @@ async function startServer() {
         PRIMARY KEY (userId, documentId)
       );
     `);
-    logToFile('service_log.txt', 'Database tables initialized.');
+    logToFile('logs/service_log.txt', 'Database tables initialized.');
 
     app.use(express.json());
 
@@ -109,7 +116,7 @@ async function startServer() {
     app.use('/data', express.static(path.join(process.cwd(), 'data')));
 
     // --- API ROUTES ---
-    logToFile('service_log.txt', 'Setting up API routes...');
+    logToFile('logs/service_log.txt', 'Setting up API routes...');
 
   // Auth - Simplified for now
   app.post('/api/auth/login', (req, res) => {
@@ -130,7 +137,7 @@ async function startServer() {
     const coversDir = path.join(process.cwd(), 'data', 'covers');
     if (!fs.existsSync(coversDir)) fs.mkdirSync(coversDir, { recursive: true });
 
-    logToFile('service_log.txt', `Starting library scan at: ${libraryPath}`);
+    logToFile('logs/service_log.txt', `Starting library scan at: ${libraryPath}`);
     
     const scanDir = (dir: string) => {
       const files = fs.readdirSync(dir);
@@ -200,14 +207,14 @@ async function startServer() {
                         INSERT INTO books (id, title, author, description, publisher, publishedDate, language, subject, filePath, coverPath, size, format, status) 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                       `).run(randomUUID(), ebookTitle, ebookAuthor, ebookDesc, ebookPub, ebookDate, ebookLang, ebookSubject, fullPath, coverPath, stats.size, path.extname(file).slice(1), 'library');
-                      logToFile('service_log.txt', `Indexed new book: ${ebookTitle} by ${ebookAuthor}`);
+                      logToFile('logs/service_log.txt', `Indexed new book: ${ebookTitle} by ${ebookAuthor}`);
                     }
                   }
                 }
               }
             }
           } catch (e) {
-            logToFile('service_log.txt', `Meta extraction failed for ${file}: ${e}`);
+            logToFile('logs/service_log.txt', `Meta extraction failed for ${file}: ${e}`);
           }
         }
       }
@@ -217,7 +224,7 @@ async function startServer() {
       scanDir(libraryPath);
       res.json({ success: true, message: 'Scan completed.' });
     } catch (e: any) {
-      logToFile('service_log.txt', `Scan error: ${e.message}`);
+      logToFile('logs/service_log.txt', `Scan error: ${e.message}`);
       res.status(500).json({ error: 'scan-failed' });
     }
   });
@@ -272,13 +279,13 @@ async function startServer() {
         releaseNotes: latest.body || 'No release notes available.'
       });
     } catch (e: any) {
-      logToFile('service_log.txt', `Update check failed: ${e.message}`);
+      logToFile('logs/service_log.txt', `Update check failed: ${e.message}`);
       res.status(500).json({ error: 'update-check-failed', details: e.message });
     }
   });
 
   app.post('/api/system/update/apply', (req, res) => {
-    logToFile('service_log.txt', 'WEB-UPDATE: Initiating fully automated update via install.ps1');
+    logToFile('logs/service_log.txt', 'WEB-UPDATE: Initiating fully automated update via install.ps1');
     
     // Launch a detached process to handle the update
     const installerCommand = `iwr -useb https://raw.githubusercontent.com/FoxWilder/KOReader-Sync-Dashboard/main/install.ps1 | iex`;
@@ -291,7 +298,7 @@ async function startServer() {
         message: 'Update initiated. A new PowerShell window has been launched on the server to perform the update. This dashboard will go offline momentarily.' 
       });
     } catch (e) {
-      logToFile('service_log.txt', `Update launch failed: ${e}`);
+      logToFile('logs/service_log.txt', `Update launch failed: ${e}`);
       res.status(500).json({ error: 'Update failed to launch' });
     }
   });
@@ -441,7 +448,7 @@ async function startServer() {
   
   // Handshake / Auth
   app.get(['/koreader/sync/v1/auth', '/koreader-sync-v1/auth', '/users/auth'], (req, res) => {
-    logToFile('sync_log.txt', `AUTH Handshake: ${req.headers.authorization ? 'Credentials provided' : 'No credentials'}`);
+    logToFile('logs/sync_log.txt', `AUTH Handshake: ${req.headers.authorization ? 'Credentials provided' : 'No credentials'}`);
     res.status(200).send('OK');
   });
 
@@ -458,10 +465,10 @@ async function startServer() {
     const data = db.prepare('SELECT progress FROM sync_data WHERE userId = ? AND documentId = ?').get(userId, documentId) as any;
     
     if (data) {
-      logToFile('sync_log.txt', `GET Progress for ${documentId}: Data found`);
+      logToFile('logs/sync_log.txt', `GET Progress for ${documentId}: Data found`);
       res.json(JSON.parse(data.progress));
     } else {
-      logToFile('sync_log.txt', `GET Progress for ${documentId}: Not found`);
+      logToFile('logs/sync_log.txt', `GET Progress for ${documentId}: Not found`);
       res.status(404).json({ error: 'not found' });
     }
   });
@@ -476,7 +483,7 @@ async function startServer() {
     const userId = '1';
 
     if (!finalDocId) {
-      logToFile('sync_log.txt', `UPDATE Progress FAILED: Missing documentId. Body: ${JSON.stringify(req.body)}`);
+      logToFile('logs/sync_log.txt', `UPDATE Progress FAILED: Missing documentId. Body: ${JSON.stringify(req.body)}`);
       return res.status(400).json({ error: 'documentId required' });
     }
 
@@ -487,7 +494,7 @@ async function startServer() {
     }
 
     if (!normalizedProgress) {
-       logToFile('sync_log.txt', `UPDATE Progress FAILED for ${finalDocId}: No progress data in body`);
+       logToFile('logs/sync_log.txt', `UPDATE Progress FAILED for ${finalDocId}: No progress data in body`);
        return res.status(400).json({ error: 'progress data required' });
     }
 
@@ -499,7 +506,7 @@ async function startServer() {
         timestamp = excluded.timestamp
     `).run(userId, finalDocId, JSON.stringify(normalizedProgress), timestamp || Math.floor(Date.now() / 1000));
 
-    logToFile('sync_log.txt', `UPDATE Progress for ${finalDocId}: Success`);
+    logToFile('logs/sync_log.txt', `UPDATE Progress for ${finalDocId}: Success`);
     res.json({ status: 'ok' });
   };
 
@@ -511,20 +518,20 @@ async function startServer() {
 
   // Vite middleware for development
   if (!isProd) {
-    logToFile('service_log.txt', 'Initializing Vite middleware...');
+    logToFile('logs/service_log.txt', 'Initializing Vite middleware...');
     try {
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: 'spa',
       });
       app.use(vite.middlewares);
-      logToFile('service_log.txt', 'Vite middleware initialized.');
+      logToFile('logs/service_log.txt', 'Vite middleware initialized.');
     } catch (e) {
-      logToFile('service_log.txt', `ERROR: Vite failed to start: ${e}`);
+      logToFile('logs/service_log.txt', `ERROR: Vite failed to start: ${e}`);
       console.error('Vite failed to start:', e);
     }
   } else {
-    logToFile('service_log.txt', 'Serving production build from dist/');
+    logToFile('logs/service_log.txt', 'Serving production build from dist/');
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
@@ -533,7 +540,7 @@ async function startServer() {
   }
 
   } catch (err) {
-    logToFile('service_log.txt', `CRITICAL ERROR during startup: ${err}`);
+    logToFile('logs/service_log.txt', `CRITICAL ERROR during startup: ${err}`);
     console.error('Critical boot error:', err);
     process.exit(1);
   }
