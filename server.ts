@@ -365,14 +365,30 @@ async function startServer() {
       }
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
       const currentVersion = pkg.version;
+      const repo = 'FoxWilder/KOReader-Sync-Dashboard';
       
-      const githubRes = await fetch('https://api.github.com/repos/FoxWilder/KOReader-Sync-Dashboard/releases/latest', {
+      let githubRes = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
         headers: { 'User-Agent': 'WilderSync-Updater' }
       });
       
-      if (!githubRes.ok) throw new Error(`GitHub API returned ${githubRes.status}`);
+      let latest: any = null;
+      if (githubRes.ok) {
+        latest = await githubRes.json();
+      } else if (githubRes.status === 404) {
+        // Fallback to tags
+        const tagsRes = await fetch(`https://api.github.com/repos/${repo}/tags`, {
+          headers: { 'User-Agent': 'WilderSync-Updater' }
+        });
+        if (tagsRes.ok) {
+          const tags = await tagsRes.json() as any[];
+          if (tags.length > 0) {
+            latest = { tag_name: tags[0].name, body: 'Rolling release (latest tag)' };
+          }
+        }
+      }
+
+      if (!latest) throw new Error(`GitHub API returned ${githubRes.status} and no tags found.`);
       
-      const latest = await githubRes.json() as any;
       const latestTag = latest.tag_name?.replace('v', '') || '0.0.0';
       const currentVerClean = currentVersion.replace('v', '');
       
@@ -481,20 +497,49 @@ async function startServer() {
 
   // Library
   app.get('/api/books', (req, res) => {
-    const { status } = req.query;
+    const { status, page, limit, q } = req.query;
+    const p = parseInt(page as string) || 1;
+    const l = parseInt(limit as string) || 20;
+    const offset = (p - 1) * l;
+    const searchTerm = q ? `%${q}%` : null;
+
     let query = 'SELECT * FROM books';
+    let countQuery = 'SELECT count(*) as count FROM books';
     const params: any[] = [];
+    const conditions: string[] = [];
     
     if (status) {
-      query += ' WHERE status = ?';
+      conditions.push('status = ?');
       params.push(status);
     } else {
-      query += " WHERE status NOT IN ('archived', 'trash')";
+      conditions.push("status NOT IN ('archived', 'trash')");
+    }
+
+    if (searchTerm) {
+      conditions.push('(title LIKE ? OR author LIKE ?)');
+      params.push(searchTerm, searchTerm);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+      countQuery += ' WHERE ' + conditions.join(' AND ');
     }
     
-    query += ' ORDER BY createdAt DESC';
-    const books = db.prepare(query).all(...params);
-    res.json(books);
+    query += ' ORDER BY createdAt DESC LIMIT ? OFFSET ?';
+    const finalParams = [...params, l, offset];
+    
+    const books = db.prepare(query).all(...finalParams);
+    const total = (db.prepare(countQuery).get(...params) as any).count;
+    
+    res.json({
+      books,
+      pagination: {
+        total,
+        page: p,
+        limit: l,
+        pages: Math.ceil(total / l)
+      }
+    });
   });
 
   app.patch('/api/books/:id', (req, res) => {

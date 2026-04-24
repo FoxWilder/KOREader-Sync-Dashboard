@@ -10,8 +10,13 @@ param (
 
 $repo = "FoxWilder/KOReader-Sync-Dashboard"
 $installDir = Get-Location
-$logDir = "$installDir\app\logs"
+$appDir = "$installDir\app"
+$logDir = "$appDir\logs"
+
+# Ensure directories exist before logging
+if (!(Test-Path $appDir)) { New-Item -ItemType Directory $appDir -Force | Out-Null }
 if (!(Test-Path $logDir)) { New-Item -ItemType Directory $logDir -Force | Out-Null }
+
 $logFile = "$logDir\install_log.txt"
 
 # --- LOGGING WRAPPER ---
@@ -19,7 +24,9 @@ function Write-Log([string]$message, [string]$color = "White") {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $fullMessage = "[$timestamp] $message"
     Write-Host $message -ForegroundColor $color
-    $fullMessage | Out-File -FilePath $logFile -Append
+    if ($logFile) {
+        $fullMessage | Out-File -FilePath $logFile -Append -Encoding utf8
+    }
 }
 
 Write-Log "--- Wilder Sync Dashboard Manager ---" "Cyan"
@@ -33,7 +40,14 @@ if ($Uninstall) {
     }
     
     Write-Log "Stopping processes..." "Yellow"
-    Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue
+    $connections = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+    if ($connections) {
+        foreach ($conn in $connections) {
+            if ($conn.OwningProcess) {
+                Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
     
     Write-Log "Removing application files..."
     Remove-Item -Recurse -Force "$installDir\app" -ErrorAction SilentlyContinue
@@ -57,14 +71,34 @@ if (Test-Path "$installDir\app\package.json") {
 # 2. Fetch Release Info
 Write-Log "Fetching version information ($Version) from GitHub..."
 try {
-    $releaseUrl = "https://api.github.com/repos/$repo/releases"
+    # Try releases first
+    $releaseUrl = "https://api.github.com/repos/$repo/releases/latest"
     if ($Version -ne "latest") {
         $releaseUrl = "https://api.github.com/repos/$repo/releases/tags/$Version"
     }
-    $releaseInfo = Invoke-RestMethod -Uri $releaseUrl
-    if ($Version -eq "latest") { $releaseInfo = $releaseInfo | Sort-Object published_at -Descending | Select-Object -First 1 }
     
-    $asset = $releaseInfo.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+    $releaseInfo = $null
+    try {
+        $releaseInfo = Invoke-RestMethod -Uri $releaseUrl
+    } catch {
+        # Fallback to tags if releases 404
+        Write-Log "Falling back to tags query..." "Gray"
+        $tags = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/tags"
+        if ($tags) {
+            $tag = $tags[0]
+            $releaseInfo = @{
+                tag_name = $tag.name
+                assets = @(@{
+                    name = "source.zip"
+                    browser_download_url = $tag.zipball_url
+                })
+            }
+        }
+    }
+
+    if (!$releaseInfo) { throw "No release or tag found." }
+    
+    $asset = $releaseInfo.assets | Where-Object { $_.name -like "*.zip" -or $_.name -like "source.zip" } | Select-Object -First 1
     $assetUrl = $asset.browser_download_url
 } catch {
     Write-Log "ERROR: Failed to fetch version info." "Red"
@@ -73,7 +107,14 @@ try {
 
 # 3. Stop running processes
 Write-Log "Ensuring workspace is unlocked..." "Yellow"
-Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue
+$connections = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+if ($connections) {
+    foreach ($conn in $connections) {
+        if ($conn.OwningProcess) {
+            Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 Start-Sleep -Seconds 2
 
 # 4. Download

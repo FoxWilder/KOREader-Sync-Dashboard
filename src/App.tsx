@@ -96,6 +96,8 @@ interface UserProfile {
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('library');
   const [books, setBooks] = useState<Book[]>([]);
+  const [pagination, setPagination] = useState<{ total: number, page: number, pages: number, limit: number } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [stats, setStats] = useState<Stats | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -157,21 +159,33 @@ export default function App() {
     }
 
     try {
-      const statusParam = ['library', 'deployment', 'settings', 'stats'].includes(activeTab) ? '' : `?status=${activeTab}`;
-      const res = await fetch(`/api/books${statusParam}`);
-      const data = await res.json();
-      setBooks(data);
+      const statusParam = ['library', 'deployment', 'settings', 'stats'].includes(activeTab) ? '' : `status=${activeTab}`;
+      const pageParam = `page=${currentPage}`;
+      const searchParam = searchQuery ? `q=${encodeURIComponent(searchQuery)}` : '';
+      const query = [statusParam, pageParam, searchParam].filter(Boolean).join('&');
       
-      // Fetch covers for books that have a coverPath
-      data.forEach(async (book: Book) => {
-        if (book.coverPath && !covers[book.id]) {
-          try {
-            const cres = await fetch(book.coverPath);
-            const b64 = await cres.text();
-            setCovers(prev => ({ ...prev, [book.id]: b64 }));
-          } catch (e) { console.error(e); }
-        }
-      });
+      const res = await fetch(`/api/books?${query}`);
+      const data = await res.json();
+      
+      // If data is the new paginated object
+      if (data.books && data.pagination) {
+        setBooks(data.books);
+        setPagination(data.pagination);
+        
+        // Fetch covers for books that have a coverPath
+        data.books.forEach(async (book: Book) => {
+          if (book.coverPath && !covers[book.id]) {
+            try {
+              const cres = await fetch(book.coverPath);
+              const b64 = await cres.text();
+              setCovers(prev => ({ ...prev, [book.id]: b64 }));
+            } catch (e) { console.error(e); }
+          }
+        });
+      } else {
+        // Fallback for unexpected format
+        setBooks(Array.isArray(data) ? data : []);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -200,7 +214,12 @@ export default function App() {
       fetchSettings();
       checkForUpdates();
     }
-  }, [activeTab]);
+  }, [activeTab, currentPage, searchQuery]);
+
+  useEffect(() => {
+    // Reset to page 1 when tab or search changes
+    setCurrentPage(1);
+  }, [activeTab, searchQuery]);
 
   const updateBookStatus = async (id: string, status: string) => {
     await fetch(`/api/books/${id}`, {
@@ -212,11 +231,8 @@ export default function App() {
   };
 
   const filteredBooks = useMemo(() => {
-    return books.filter(b => 
-      b.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      b.author.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [books, searchQuery]);
+    return books;
+  }, [books]);
 
   const sidebarItems: { id: Tab; label: string; icon: any }[] = [
     { id: 'library', label: 'All Books', icon: Library },
@@ -748,72 +764,103 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                    <VGrid
-                      row={Math.max(1, Math.ceil(filteredBooks.length / columns))}
-                      col={columns}
-                      cellHeight={340}
-                      cellWidth={Math.floor((window.innerWidth - (window.innerWidth >= 768 ? 256 : 80) - 80) / columns)}
-                      className="h-full p-8 scrollbar-hide"
-                    >
-                      {({ rowIndex, colIndex }) => {
-                        const bookIndex = rowIndex * columns + colIndex;
-                        const book = (finalFilteredBooks || [])[bookIndex];
-                        if (!book) return null;
-                        const progress = parseProgress(book.progress);
-                        const percentage = progress?.percentage || 0;
+                    <div className="flex flex-col h-full">
+                      <div className="flex-grow overflow-hidden">
+                        <VGrid
+                          row={Math.max(1, Math.ceil(filteredBooks.length / columns))}
+                          col={columns}
+                          cellHeight={340}
+                          cellWidth={Math.floor((window.innerWidth - (window.innerWidth >= 768 ? 256 : 80) - 80) / columns)}
+                          className="h-full p-8 scrollbar-hide"
+                        >
+                          {({ rowIndex, colIndex }) => {
+                            const bookIndex = rowIndex * columns + colIndex;
+                            const book = (finalFilteredBooks || [])[bookIndex];
+                            if (!book) return null;
+                            const progress = parseProgress(book.progress);
+                            const percentage = progress?.percentage || 0;
 
-                        return (
-                          <div className="p-4 h-full">
-                            <motion.div 
-                              whileHover={{ y: -8, scale: 1.02 }}
-                              onClick={() => setSelectedBook(book)}
-                              className="group flex flex-col gap-3 cursor-pointer h-full"
-                            >
-                              <div className="relative aspect-[2/3] w-full max-w-[220px] mx-auto bg-[#0d0d0f] rounded-2xl border border-white/5 group-hover:border-[#34d399]/40 transition-all shadow-2xl overflow-hidden shrink-0">
-                                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                
-                                {covers[book.id] ? (
-                                  <img src={covers[book.id]} alt={book.title} className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" />
-                                ) : (
-                                  <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center gap-3 bg-gradient-to-br from-[#0d0d0f] to-[#16161a]">
-                                    <BookOpen size={24} className="text-[#34d399]/20" strokeWidth={1.5} />
-                                    <p className="text-[8px] text-[#3f3f46] font-black uppercase tracking-[.2em] leading-normal opacity-50">No Data Cover</p>
-                                  </div>
-                                )}
-                                
-                                {percentage > 0 && (
-                                  <div className="absolute top-0 left-0 w-full h-0.5 bg-black/60 backdrop-blur-md z-20 overflow-hidden">
-                                    <motion.div 
-                                      initial={{ width: 0 }}
-                                      animate={{ width: `${percentage}%` }}
-                                      className="h-full bg-gradient-to-r from-[#34d399] to-[#10b981]" 
-                                    />
-                                  </div>
-                                )}
+                            return (
+                              <div className="p-4 h-full" key={bookIndex}>
+                                <motion.div 
+                                  whileHover={{ y: -8, scale: 1.02 }}
+                                  onClick={() => setSelectedBook(book)}
+                                  className="group flex flex-col gap-3 cursor-pointer h-full"
+                                >
+                                  <div className="relative aspect-[2/3] w-full max-w-[220px] mx-auto bg-[#0d0d0f] rounded-2xl border border-white/5 group-hover:border-[#34d399]/40 transition-all shadow-2xl overflow-hidden shrink-0">
+                                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    
+                                    {covers[book.id] ? (
+                                      <img src={covers[book.id]} alt={book.title} className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-110" />
+                                    ) : (
+                                      <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center gap-3 bg-gradient-to-br from-[#0d0d0f] to-[#16161a]">
+                                        <BookOpen size={24} className="text-[#34d399]/20" strokeWidth={1.5} />
+                                        <p className="text-[8px] text-[#3f3f46] font-black uppercase tracking-[.2em] leading-normal opacity-50">No Data Cover</p>
+                                      </div>
+                                    )}
+                                    
+                                    {percentage > 0 && (
+                                      <div className="absolute top-0 left-0 w-full h-0.5 bg-black/60 backdrop-blur-md z-20 overflow-hidden">
+                                        <motion.div 
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${percentage}%` }}
+                                          className="h-full bg-gradient-to-r from-[#34d399] to-[#10b981]" 
+                                        />
+                                      </div>
+                                    )}
 
-                                <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
-                                  {(book as any).aiSector && (
-                                    <div className="px-2 py-1 bg-[#34d399] text-black text-[7px] font-black rounded uppercase tracking-tighter shadow-xl italic">
-                                      {(book as any).aiSector}
+                                    <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
+                                      {(book as any).aiSector && (
+                                        <div className="px-2 py-1 bg-[#34d399] text-black text-[7px] font-black rounded uppercase tracking-tighter shadow-xl italic">
+                                          {(book as any).aiSector}
+                                        </div>
+                                      )}
+                                      <div className="bg-white/10 backdrop-blur-2xl border border-white/20 px-1.5 py-0.5 rounded-md text-[7px] font-black text-white uppercase tracking-widest">
+                                        {book.format}
+                                      </div>
                                     </div>
-                                  )}
-                                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 px-1.5 py-0.5 rounded-md text-[7px] font-black text-white uppercase tracking-widest">
-                                    {book.format}
                                   </div>
-                                </div>
+                                  
+                                  <div className="space-y-0.5 flex-grow overflow-hidden">
+                                    <h3 className="text-[10px] font-black truncate text-white tracking-tight leading-tight group-hover:text-[#34d399] transition-colors block uppercase tracking-widest" title={book.title}>
+                                      {book.title}
+                                    </h3>
+                                    <p className="text-[8px] text-[#52525b] font-black truncate uppercase tracking-tighter opacity-80">{book.author}</p>
+                                  </div>
+                                </motion.div>
                               </div>
-                              
-                              <div className="space-y-0.5 flex-grow overflow-hidden">
-                                <h3 className="text-[10px] font-black truncate text-white tracking-tight leading-tight group-hover:text-[#34d399] transition-colors block uppercase tracking-widest" title={book.title}>
-                                  {book.title}
-                                </h3>
-                                <p className="text-[8px] text-[#52525b] font-black truncate uppercase tracking-tighter opacity-80">{book.author}</p>
-                              </div>
-                            </motion.div>
-                          </div>
-                        );
-                      }}
-                    </VGrid>
+                            );
+                          }}
+                        </VGrid>
+                      </div>
+
+                      {pagination && pagination.pages > 1 && (
+                        <div className="h-16 border-t border-white/5 bg-black/20 flex items-center justify-between px-8 shrink-0">
+                           <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-[#52525b]">
+                              <span className="text-white">Page {pagination.page}</span>
+                              <span className="opacity-30">/</span>
+                              <span>{pagination.pages} Total</span>
+                           </div>
+
+                           <div className="flex items-center gap-3">
+                              <button 
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                className="px-4 py-2 rounded-xl bg-white/5 border border-white/5 text-[9px] font-black uppercase tracking-widest hover:text-[#34d399] transition-all disabled:opacity-20"
+                              >
+                                 Prev
+                              </button>
+                              <button 
+                                disabled={currentPage === pagination.pages}
+                                onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
+                                className="px-4 py-2 rounded-xl bg-white/5 border border-white/5 text-[9px] font-black uppercase tracking-widest hover:text-[#34d399] transition-all disabled:opacity-20"
+                              >
+                                 Next
+                              </button>
+                           </div>
+                        </div>
+                      )}
+                    </div>
                 )}
               </motion.div>
             )}
